@@ -10,4 +10,4 @@ This repository contains three main folders.
 **03-stats_and_visualisation** contains script to run all statistical analyses and produce all figures in the paper. All figures are saved in a subfolder called 'figures'.
 
 For reproducibility, .renv() files in the project allow re-installation of all packages in the versions used for the paper.
-The paper was made using R version 4.2.0 (2022-04-22 ucrt).
+All analyses in the paper used R version 4.2.0 (2022-04-22 ucrt).
