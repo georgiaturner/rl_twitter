@@ -17,7 +17,7 @@
 # of it can be saved.
 
 # It takes in the specific model it is fitting as a parameter 'which_mod' using commandArgs, so that it can parallelise the model computation in the cluster.
-# but if you want to run it you can just rest 'which_mod' within the script to the specific model you want to run.
+# but if you want to run it you can just set 'which_mod' within the script to the specific model you want to run.
 
 # By Georgia Turner, 2024 < georgianjt@gmail.com >
 
@@ -31,19 +31,19 @@
 
 
 rm(list = ls())
-seed = 1
+seed = 14
 set.seed(seed)
 
 
 library(tidyverse)
 library(lubridate)
 
-using_cluster <- F
+using_cluster <- T 
 
 if (!using_cluster) {
   library(here) 
   setwd(here("02-model_fitting_and_simulation"))
-  which_mod <- "RL1" # FP, CP, PH, RL1, RL2, RLH1, RLH2 - choose which model you want to do
+  which_mod <- "RLH2" # FP, CP, HP, RL1, RL2, RLH1, RLH2 - choose which model you want to do
   
 } else {
   #### get model argument from commandline (these are looped through in the shell script, which should be saved in this directory)
@@ -55,6 +55,7 @@ if (!using_cluster) {
   
 }
 
+getwd()
 source("01-model_functions.R"); # load in model functions.
 
 
@@ -92,7 +93,7 @@ if (data_type == "AH_disc") {
 } else if (data_type == "AH_conf") {
   
   data_path        <- "./../../../../../../data/2022_EichstaedtTwitter/AH/"
-  data_name_string <- "241104_241104_240416_AHconf_cleaned_preproc"
+  data_name_string <- "251105_251105_240416_AHconf_cleaned_preproc"
   tpost_unit = "seconds";
 
 } else if (data_type == "simgen_FP") {
@@ -152,7 +153,7 @@ fit_dat          <- read_csv(paste(data_path,  data_name_string, ".csv", sep = "
 # convert tpost to days as model fitting code assumes this unit with various constraints e.g. when rounding '0' to .0001
 if (tpost_unit == "seconds") {
   fit_dat$t_post <- fit_dat$t_post/ (3600*24)
-  tpost_unit <- "days"
+  tpost_unit     <- "days"
 }
 
 ##################################################################################################################
@@ -211,7 +212,7 @@ if (which_mod == "FP") {
     sub    = as.data.frame(sub)
     sub    = subset(sub, !is.na(t_post))
     s_data = data.frame(t_post = as.numeric(sub$t_post), 
-                        likes = as.numeric(sub$likes))
+                        likes  = as.numeric(sub$likes))
     rownames(s_data) <- NULL
     
     # run the model 
@@ -289,7 +290,7 @@ if (which_mod == "FP") {
     sub    = as.data.frame(sub)
     sub    = subset(sub, !is.na(t_post))
     s_data = data.frame(t_post = as.numeric(sub$t_post), 
-                        likes = as.numeric(sub$likes))
+                        likes  = as.numeric(sub$likes))
     rownames(s_data) <- NULL
     
     inits <- 50
@@ -452,8 +453,8 @@ if (which_mod == "FP") {
       while (!FitFound) {
         
         # randomized start values for the parameters:
-        starting <- c(runif(1, 0, 1),   # alpha
-                      runif(1, .1, 10)  # cost
+        starting <- c(runif(1, 0, 1),   # alpha_reward
+                      runif(1, .1, 10)  # cost_constant
                       )
         
         # run fit:
@@ -503,10 +504,10 @@ if (which_mod == "FP") {
     if (skip_sub == TRUE) {
       error_subs_RL1 <- append(error_subs_RL1, sub$user_num[1])
       fitdat_RL1     <- rbind(fitdat_RL1, data.frame(user_num  = sub$user_num[1], 
-                                                                    LL        = NA, 
-                                                                    AIC       = NA, 
-                                                                    alpha     = NA, 
-                                                                    cost      = NA))
+                                                                    LL           = NA, 
+                                                                    AIC          = NA, 
+                                                                    alpha_reward = NA, 
+                                                                    cost_constant = NA))
       
       next
     }
@@ -519,8 +520,8 @@ if (which_mod == "FP") {
                         data.frame(user_num = sub$user_num[1], 
                                    LL       = fit$value, 
                                    AIC      = fit$AIC, 
-                                   alpha    = fit$par[1], 
-                                   cost     = fit$par[2]))
+                                   alpha_reward    = fit$par[1], 
+                                   cost_constant   = fit$par[2]))
     
     # Now simulate the model again with the best fitting parameters, in order to extract the policy (pol_par_all) and subjective reward rate (R_est) for plotting
     ################################################################################
@@ -530,7 +531,7 @@ if (which_mod == "FP") {
     # Get best fitting parameters for that subject.
     fit_params_RL1   <- unlist(dplyr::select(filter(fitdat_RL1, 
                                                     user_num == sub$user_num[1]),
-                                                    alpha, cost));
+                                                    alpha_reward, cost_constant));
     simsub_RL1       <- mod_RL(pars      = fit_params_RL1, 
                                outp      = "sim1step", 
                                LR_rule   = 1, 
@@ -547,8 +548,8 @@ if (which_mod == "FP") {
                                    R_est       = simsub_RL1$R_est,
                                    RPE         = simsub_RL1$RPE, 
                                    AIC         = fitdat_RL1[i, "AIC"], 
-                                   alpha       = fitdat_RL1[i, "alpha"], 
-                                   cost        = fitdat_RL1[i, "cost"]))
+                                   alpha_reward  = fitdat_RL1[i, "alpha_reward"], 
+                                   cost_constant = fitdat_RL1[i, "cost_constant"]))
     ################################################################################
     
     # print
@@ -585,7 +586,7 @@ if (which_mod == "FP") {
   ### Loop over all users
   for (i in start:(length(inds))) {
     
-    print(str_c("Currently fitting ",which_mod, " to user ", i, " out of ", length(inds)))
+    print(str_c("Currently fitting ", which_mod, " to user ", i, " out of ", length(inds)))
     
     # get data for this subject
     sub <- subset(fit_dat, user_num == inds[i])
@@ -617,7 +618,7 @@ if (which_mod == "FP") {
         # randomised start values for parameters:
         starting <- c(runif(1, 0, 1), # alpha_P
                       runif(1, 0, 1), # alpha_N
-                      runif(1, .1, 10)) # cost
+                      runif(1, .1, 10)) # cost_constant
 
         # run fit:
         fit.temp <- try(optim(starting, mod_RL, 
@@ -670,7 +671,7 @@ if (which_mod == "FP") {
                                                     AIC       = NA, 
                                                     alpha_P   = NA, 
                                                     alpha_N   = NA,  
-                                                    cost      = NA))
+                                                    cost_constant  = NA))
       
       next
     }
@@ -685,7 +686,7 @@ if (which_mod == "FP") {
                                    AIC      = fit$AIC, 
                                    alpha_P  = fit$par[1], 
                                    alpha_N  = fit$par[2], 
-                                   cost     = fit$par[3]))
+                                   cost_constant = fit$par[3]))
     
     # Now simulate the model again with the best fitting parameters, in order to extract the policy (pol_par_all) and subjective reward rate (R_est) for plotting
     ################################################################################
@@ -693,7 +694,7 @@ if (which_mod == "FP") {
     ################################################################################
     
     # Get best fitting parameters for that subject.
-    fit_params_RL2   <- unlist(dplyr::select(filter(fitdat_RL2, user_num == sub$user_num[1]), alpha_P, alpha_N, cost));
+    fit_params_RL2   <- unlist(dplyr::select(filter(fitdat_RL2, user_num == sub$user_num[1]), alpha_P, alpha_N, cost_constant));
     simsub_RL2       <- mod_RL(pars = fit_params_RL2, 
                                outp       = "sim1step", 
                                LR_rule    = 2, 
@@ -712,7 +713,7 @@ if (which_mod == "FP") {
                                    AIC         = fitdat_RL2[i, "AIC"], 
                                    alpha_P     = fitdat_RL2[i, "alpha_P"], 
                                    alpha_N     = fitdat_RL2[i, "alpha_N"],
-                                   cost        = fitdat_RL2[i, "cost"]))
+                                   cost_constant = fitdat_RL2[i, "cost_constant"]))
     ################################################################################
     
     # print
@@ -727,14 +728,14 @@ if (which_mod == "FP") {
   write_csv(fitdat_RL2, str_c(fit_path, "/", format(Sys.time(),  "%y%m%d-%H%M"), which_mod, seed, ".csv"))
   write_csv(simdat_RL2,  str_c(sim1step_path, "/", format(Sys.time(),  "%y%m%d-%H%M"), which_mod, seed, ".csv"))
 
-} else if (which_mod == "PH")  {
+} else if (which_mod == "HP")  {
   
   #####################################################################################
-  ##### PURE HABIT MODEL (PH)
+  ##### HABITUAL POLICY MODEL (HP)
   #####################################################################################
   
   ### initialise df for subs who fail to converge
-  error_subs_PH  <- c()  
+  error_subs_HP  <- c()  
   max_tries  <- 10000; # maximum amount of fitting tries before considering subject a failed sub
   
   # count users
@@ -743,8 +744,8 @@ if (which_mod == "FP") {
   
   #########
   
-  fitdat_PH <- data.frame()
-  simdat_PH <- data.frame()
+  fitdat_HP <- data.frame()
+  simdat_HP <- data.frame()
   start <- 1
   
   ### Loop over all users
@@ -753,9 +754,9 @@ if (which_mod == "FP") {
     print(str_c("Currently fitting ",which_mod, " to user ", i, " out of ", length(inds)))
     
     # get data for this subject
-    sub <- subset(fit_dat, user_num == inds[i])
-    sub <- as.data.frame(sub)
-    sub <- subset(sub, !is.na(t_post)) # remove any NAs
+    sub    <- subset(fit_dat, user_num == inds[i])
+    sub    <- as.data.frame(sub)
+    sub    <- subset(sub, !is.na(t_post)) # remove any NAs
     s_data <- data.frame(t_post    = as.numeric(sub$t_post), 
                          likes     = as.numeric(sub$likes)) 
     rownames(s_data) <- NULL
@@ -768,8 +769,7 @@ if (which_mod == "FP") {
     if (exists("fit.temp")) {
       rm(fit.temp)
     }
-    
-    
+
     for (ins in 1:inits) { # loops over the random initializations
       
       print(str_c("optim initialisation ", as.character(ins)))
@@ -787,7 +787,7 @@ if (which_mod == "FP") {
         starting <- c(runif(1, 0, 1) # alpha_action
                       ) 
 
-        fit.temp <- try(optim(starting, mod_PH, 
+        fit.temp <- try(optim(starting, mod_HP, 
                               outp       = "fit", 
                               input_dat  = s_data, 
                               method     ="Brent",lower=0, upper=1, control = list(maxit = 500)), silent = T)
@@ -830,10 +830,10 @@ if (which_mod == "FP") {
     
     ### store info about skipped subject if they were skipped due to nonconvergence
     if (skip_sub == TRUE) {
-      error_subs_PH <- append(error_subs_PH, sub$user_num[1])
-      fitdat_PH     <- rbind(fitdat_PH, data.frame(user_num = sub$user_num[1], 
-                                                   LL = NA, 
-                                                   AIC = NA, 
+      error_subs_HP <- append(error_subs_HP, sub$user_num[1])
+      fitdat_HP     <- rbind(fitdat_HP, data.frame(user_num = sub$user_num[1], 
+                                                   LL       = NA, 
+                                                   AIC      = NA, 
                                                    alpha_action = NA
                                                    ))
       
@@ -844,36 +844,36 @@ if (which_mod == "FP") {
     fit$AIC <- fit$value + 2 * length(fit$par) 
     
     # save output
-    fitdat_PH <- rbind(fitdat_PH, 
+    fitdat_HP <- rbind(fitdat_HP, 
                        data.frame(user_num = sub$user_num[1], 
                                   LL       = fit$value, 
                                   AIC      = fit$AIC, 
                                   alpha_action  = fit$par[1]))
     
-    # Now simulate the model again with the best fitting parameters, in order to extract the policy (pol_par_all) and subjective habit policy for plotting
+    # Now simulate the model again with the best fitting parameters, in order to extract variables such as the policy (pol_par_all) and subjective habitual tendency for plotting
     
     ################################################################################
-    ## SIMULATE PH
+    ## SIMULATE HP
     ################################################################################
     
     # Get best fitting parameters for that subject.
-    fit_params_PH   <- unlist(dplyr::select(filter(fitdat_PH, user_num == sub$user_num[1]), alpha_action));
+    fit_params_HP   <- unlist(dplyr::select(filter(fitdat_HP, user_num == sub$user_num[1]), alpha_action));
 
-    simsub_PH       <- mod_PH(pars = fit_params_PH, 
+    simsub_HP       <- mod_HP(pars = fit_params_HP, 
                               outp = "sim1step", 
                               input_dat = s_data);
     
     # Save output
-    simdat_PH       <- rbind(simdat_PH, 
+    simdat_HP       <- rbind(simdat_HP, 
                              data.frame(user_num    = sub$user_num[1], 
                                         t_post   = c(s_data$t_post, NA),
-                                        pol_par_all = simsub_PH$pol_par_all, 
-                                        simdat      = simsub_PH$simdat, 
-                                        likes       = simsub_PH$likes,
-                                        APE         = simsub_PH$APE,  
-                                        habit       = simsub_PH$habit,
-                                        AIC         = fitdat_PH[i, "AIC"], 
-                                        alpha_action = fitdat_PH[i, "alpha_action"]
+                                        pol_par_all = simsub_HP$pol_par_all, 
+                                        simdat      = simsub_HP$simdat, 
+                                        likes       = simsub_HP$likes,
+                                        APE         = simsub_HP$APE,  
+                                        habitual_tendency = simsub_HP$habitual_tendency,
+                                        AIC         = fitdat_HP[i, "AIC"], 
+                                        alpha_action = fitdat_HP[i, "alpha_action"]
                                         ))
     
     ################################################################################
@@ -885,10 +885,10 @@ if (which_mod == "FP") {
   
   ##############
   #### save
-  fitdat_PH$dataset_description  <- dataset_description
-  simdat_PH$dataset_description  <- dataset_description
-  write_csv(fitdat_PH, str_c(fit_path, "/", format(Sys.time(), "%y%m%d-%H%M"), which_mod, seed, ".csv"))
-  write_csv(simdat_PH, str_c(sim1step_path, "/", format(Sys.time(), "%y%m%d-%H%M"), which_mod, seed, ".csv"))
+  fitdat_HP$dataset_description  <- dataset_description
+  simdat_HP$dataset_description  <- dataset_description
+  write_csv(fitdat_HP, str_c(fit_path, "/", format(Sys.time(), "%y%m%d-%H%M"), which_mod, seed, ".csv"))
+  write_csv(simdat_HP, str_c(sim1step_path, "/", format(Sys.time(), "%y%m%d-%H%M"), which_mod, seed, ".csv"))
 
 } else if (which_mod == "RLH1")  {
   
@@ -944,10 +944,10 @@ if (which_mod == "FP") {
       while (!FitFound) {
         
         # randomized start values for the parameter:
-        starting <- c(runif(1, 0, 1), # alpha
-                      runif(1, .1, 10), # cost
-                      runif(1, 0, 1), # alpha_action
-                      runif(1, 0, 1) # stickiness_weight
+        starting <- c(runif(1, 0, 1),   # alpha_reward
+                      runif(1, .1, 10), # cost_constant
+                      runif(1, 0, 1),   # alpha_action
+                      runif(1, 0, 1)    # habit_weight
         )
 
         # now run the fit
@@ -1000,10 +1000,10 @@ if (which_mod == "FP") {
       fitdat_RLH1     <- rbind(fitdat_RLH1, data.frame(user_num = sub$user_num[1], 
                                                        LL    = NA, 
                                                        AIC   = NA, 
-                                                       alpha = NA,
-                                                       cost  = NA,
+                                                       alpha_reward      = NA,
+                                                       cost_constant     = NA,
                                                        alpha_action      = NA,
-                                                       stickiness_weight = NA
+                                                       habit_weight      = NA
       ))
       
       next
@@ -1017,22 +1017,22 @@ if (which_mod == "FP") {
                          data.frame(user_num = sub$user_num[1], 
                                     LL       = fit$value, 
                                     AIC      = fit$AIC, 
-                                    alpha    = fit$par[1],
-                                    cost     = fit$par[2],
-                                    alpha_action       = fit$par[3],
-                                    stickiness_weight  = fit$par[4]
+                                    alpha_reward  = fit$par[1],
+                                    cost_constant = fit$par[2],
+                                    alpha_action  = fit$par[3],
+                                    habit_weight  = fit$par[4]
                                     ))
     
-    # Now simulate the model again with the best fitting parameters, in order to extract the policy (pol_par_all) and subjective habit policy for plotting
+    # Now simulate the model again with the best fitting parameters, in order to extract the variables such as policy (pol_par_all) and subjective habitual tendency for plotting
     
     ################################################################################
     ## SIMULATE RLH1
     ################################################################################
     
     # Get best fitting parameters for that subject.
-    fit_params_RLH1   <- unlist(dplyr::select(filter(fitdat_RLH1, user_num == sub$user_num[1]), alpha, cost, alpha_action, stickiness_weight));
+    fit_params_RLH1   <- unlist(dplyr::select(filter(fitdat_RLH1, user_num == sub$user_num[1]), alpha_reward, cost_constant, alpha_action, habit_weight));
     print("before simsub")
-    simsub_RLH1          <- mod_RLH(pars   = fit_params_RLH1, 
+    simsub_RLH1          <- mod_RLH(pars      = fit_params_RLH1, 
                                     LR_rule   = 1,
                                     outp      = "sim1step", 
                                     input_dat = s_data);
@@ -1046,14 +1046,14 @@ if (which_mod == "FP") {
                                     simdat      = simsub_RLH1$simdat, 
                                     likes       = simsub_RLH1$likes,
                                     APE         = simsub_RLH1$APE, 
-                                    habit       = simsub_RLH1$habit,
+                                    habitual_tendency   = simsub_RLH1$habitual_tendency,
                                     RPE         = simsub_RLH1$RPE,
                                     R_est       = simsub_RLH1$R_est,
                                     AIC         = fitdat_RLH1[i, "AIC"], 
-                                    alpha       = fitdat_RLH1[i, "alpha"],
-                                    cost        = fitdat_RLH1[i, "cost"],
+                                    alpha_reward      = fitdat_RLH1[i, "alpha_reward"],
+                                    cost_constant     = fitdat_RLH1[i, "cost_constant"],
                                     alpha_action      = fitdat_RLH1[i, "alpha_action"],
-                                    stickiness_weight = fitdat_RLH1[i, "stickiness_weight"]
+                                    habit_weight      = fitdat_RLH1[i, "habit_weight"]
                                     ))
     
     ################################################################################
@@ -1125,9 +1125,9 @@ if (which_mod == "FP") {
         # randomly initialise starting points for parameters
         starting <- c(runif(1, 0, 1),   # alpha_P
                       runif(1, 0, 1),   # alpha_N
-                      runif(1, .1, 10), # cost
+                      runif(1, .1, 10), # cost_constant
                       runif(1, 0, 1),   # alpha_action
-                      runif(1, 0, 1)    # stickiness_weight
+                      runif(1, 0, 1)    # habit_weight
         )
 
         # run fits        
@@ -1183,9 +1183,9 @@ if (which_mod == "FP") {
                                           AIC     = NA, 
                                           alpha_P = NA,
                                           alpha_N = NA,
-                                          cost    = NA,
-                                          alpha_action      = NA,
-                                          stickiness_weight = NA
+                                          cost_constant = NA,
+                                          alpha_action  = NA,
+                                          habit_weight  = NA
                                           ))
       next
     }
@@ -1200,19 +1200,19 @@ if (which_mod == "FP") {
                                     AIC      = fit$AIC, 
                                     alpha_P  = fit$par[1],
                                     alpha_N  = fit$par[2],
-                                    cost     = fit$par[3],
-                                    alpha_action       = fit$par[4],
-                                    stickiness_weight  = fit$par[5]
+                                    cost_constant = fit$par[3],
+                                    alpha_action  = fit$par[4],
+                                    habit_weight  = fit$par[5]
                                     ))
     
-    # Now simulate the model again with the best fitting parameters, in order to extract the policy (pol_par_all) and subjective habit policy for plotting
+    # Now simulate the model again with the best fitting parameters, in order to extract variables such as the policy (pol_par_all) and habitual tendency for plotting
    
     ################################################################################
     ## SIMULATE RLH2
     ################################################################################
     
     # Get best fitting parameters for that subject.
-    fit_params_RLH2   <- unlist(dplyr::select(filter(fitdat_RLH2, user_num == sub$user_num[1]), alpha_P, alpha_N, cost, alpha_action, stickiness_weight));
+    fit_params_RLH2   <- unlist(dplyr::select(filter(fitdat_RLH2, user_num == sub$user_num[1]), alpha_P, alpha_N, cost_constant, alpha_action, habit_weight));
 
     simsub_RLH2       <- mod_RLH(pars      = fit_params_RLH2, 
                                  LR_rule   = 2,
@@ -1228,15 +1228,15 @@ if (which_mod == "FP") {
                                     simdat       = simsub_RLH2$simdat, 
                                     likes        = simsub_RLH2$likes,
                                     APE          = simsub_RLH2$APE, 
-                                    habit        = simsub_RLH2$habit,
+                                    habitual_tendency   = simsub_RLH2$habitual_tendency,
                                     RPE          = simsub_RLH2$RPE,
                                     R_est        = simsub_RLH2$R_est,
                                     AIC          = fitdat_RLH2[i, "AIC"], 
                                     alpha_P      = fitdat_RLH2[i, "alpha_P"],
                                     alpha_N      = fitdat_RLH2[i, "alpha_N"],
-                                    cost         = fitdat_RLH2[i, "cost"],
-                                    alpha_action      = fitdat_RLH2[i, "alpha_action"],
-                                    stickiness_weight = fitdat_RLH2[i, "stickiness_weight"]
+                                    cost_constant  = fitdat_RLH2[i, "cost_constant"],
+                                    alpha_action   = fitdat_RLH2[i, "alpha_action"],
+                                    habit_weight   = fitdat_RLH2[i, "habit_weight"]
                                     ))
     ################################################################################
     

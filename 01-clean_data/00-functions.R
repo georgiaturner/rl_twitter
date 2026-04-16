@@ -23,7 +23,7 @@ preprocess_clump <- function(df, clumping_fun, grouping_latency) {
   ## It then deletes all the consecutive lines in the clump apart from the first, 
   ## thereby only retaining the long-enough t_post
   ## with the amount of likes and RTs on this long t_post the same amount as the combined
-  ## number within the clump, combined according to clumping_fun. 
+  ## number within the clump, combined according to the function clumping_fun. 
   ## it retains columns containing info about whether it was a clump in the first place ('is_clump'), and what the
   ## clumping function was ('clumping_fun').
   ## It is an open question what to do with likes and RTs in the 'clump'.
@@ -60,7 +60,7 @@ preprocess_clump <- function(df, clumping_fun, grouping_latency) {
 ###### Functions for 02-pre-process_twitter_data.R
 #####################################################################################################################
 
-# filter dataset to the amount of months required,centered around questionnaire date
+# filter dataset to the amount of months required, centered around questionnaire date
 filt_around_qnr <- function(dataset, nmonths_total, timeofquestionnaire_col) {
   timeofquestionnaire_col_sym <- sym(timeofquestionnaire_col)
   
@@ -88,7 +88,7 @@ visualise_npostdist <- function(dataset, title, bwidth) {
     theme_classic()+
     annotate("text", x = median_val, y = Inf, label = paste("Median =", median_val),
              vjust = 1, hjust = 0.5, color = "red", size = 4) +
-    labs(title = str_c("Histogram of ", title, " nposts"), x = "Number of Posts", y = "Frequency")
+    labs(title = str_c("Histogram of number of posts, ", title), x = "Number of Posts", y = "Frequency")
 }
 
 # filter dataset to only include users with minimum number of posts

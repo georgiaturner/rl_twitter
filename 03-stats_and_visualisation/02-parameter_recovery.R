@@ -257,19 +257,54 @@ RLH21000 <- plot_correlation_grid(correlation_matrices1000[["RLH21000"]])
 
 
 #################
-##### Figure S2
+##### Figure S3
 #################
 
-FigS2 <- grid.arrange(FP80, CP80, PH80, RL180, RL280, RLH180, RLH280,
+FigS3 <- grid.arrange(FP80, CP80, PH80, RL180, RL280, RLH180, RLH280,
              FP1000, CP1000, PH1000, RL11000, RL21000, RLH11000, RLH21000,
              heights = c(1,1),
              nrow = 2)
 
 
 
-ggsave("figures/FigS2.png", plot = FigS2, width = 21, height = 10, units = "in")
+ggsave("figures/FigS3.png", plot = FigS3, width = 21, height = 10, units = "in")
 
+### Fig S3 source data
 
+data_FigS3 <- data.frame(
+  fit_FP80$policy, simgen_FP80$policy,
+  fit_FP1000$policy, simgen_FP1000$policy,
+  
+  fit_CP80$a, fit_CP80$b, fit_CP80$c,
+  simgen_CP80$a, simgen_CP80$b, simgen_CP80$c,
+  fit_CP1000$a, fit_CP1000$b, fit_CP1000$c,
+  simgen_CP1000$a, simgen_CP1000$b, simgen_CP1000$c,
+  
+  fit_PH80$alpha_action, simgen_PH80$alpha_action,
+  fit_PH1000$alpha_action, simgen_PH1000$alpha_action,
+  
+  fit_RL180$alpha,fit_RL180$cost,
+  simgen_RL180$alpha, simgen_RL180$cost,
+  fit_RL11000$alpha,fit_RL11000$cost,
+  simgen_RL11000$alpha, simgen_RL11000$cost,
+  
+  fit_RL280$alpha_P,fit_RL280$alpha_N,fit_RL280$cost,
+  simgen_RL280$alpha_P, simgen_RL280$alpha_N, simgen_RL280$cost,
+  fit_RL21000$alpha_P, fit_RL21000$alpha_N, fit_RL21000$cost,
+  simgen_RL21000$alpha_P, simgen_RL21000$alpha_N, simgen_RL21000$cost,
+  
+  fit_RLH180$alpha, fit_RLH180$cost, fit_RLH180$alpha_action, fit_RLH180$stickiness_weight,
+  simgen_RLH180$alpha, simgen_RLH180$cost, simgen_RLH180$alpha_action, simgen_RLH180$stickiness_weight,
+  fit_RLH11000$alpha, fit_RLH11000$cost, fit_RLH11000$alpha_action, fit_RLH11000$stickiness_weight,
+  simgen_RLH11000$alpha, simgen_RLH11000$cost, simgen_RLH11000$alpha_action, simgen_RLH11000$stickiness_weight,
+  
+  fit_RLH280$alpha_P, fit_RLH280$alpha_N, fit_RLH280$cost, fit_RLH280$alpha_action, fit_RLH280$stickiness_weight,
+  simgen_RLH280$alpha_P, simgen_RLH280$alpha_N, simgen_RLH280$cost, simgen_RLH280$alpha_action, simgen_RLH280$stickiness_weight,
+  fit_RLH21000$alpha_P, fit_RLH21000$alpha_N, fit_RLH21000$cost, fit_RLH21000$alpha_action, fit_RLH21000$stickiness_weight,
+  simgen_RLH21000$alpha_P, simgen_RLH21000$alpha_N, simgen_RLH21000$cost, simgen_RLH21000$alpha_action, simgen_RLH21000$stickiness_weight
 
+)
+
+write_csv(data_FigS3, "./../03-stats_and_visualisation/source_data/data_figS3.csv")
 
 

@@ -7,11 +7,11 @@
 #---------------------------------------------------------------------------------------------------------------------------#
 #---------------------------------------------------------------------------------------------------------------------------#
 
-# This script preprocesses data from the Authentic Happiness dataset, scraped from Twitter, 
+# This script pre-processes data from the Authentic Happiness dataset, scraped from Twitter, 
 # after it has gone through initial cleaning. 
 #                                                                                                                            
 # It loads the datasets that have already been cleaned by the script '01-clean_twitter_data.R' in the same folder.
-# It preprocesses the datasets further by applying exclusion criteria of time periods and number of posts.
+# It pre-processes the datasets further by applying exclusion criteria of time periods and number of posts.
 
 # By Georgia Turner, 2024 < georgianjt@gmail.com >
 
@@ -48,7 +48,7 @@ data_type <- "AHconf" # whether to load discovery or confirmatory sample
 if (data_type == "AHdisc") {
   moddat_name   <- "241104_240228_AHdisc_cleaned" # discovery sample
 } else if (data_type == "AHconf") {
-  moddat_name   <- "241104_240416_AHconf_cleaned"           # confirmatory sample
+  moddat_name   <- "251105_240416_AHconf_cleaned"           # confirmatory sample
 }
 
 moddat        <- read_csv(paste(data_path,  moddat_name, ".csv", sep = ""));
@@ -61,7 +61,6 @@ moddat <- moddat %>%
   group_by(user_num) %>%
   ### add in their oldest post so we can calculate time spent on Twitter for the final analyses
   mutate(t_firstpost = first(datetime)) 
-
 
 #####################################################################################
 ##### FILTER DATASET ACCORDING TO VARIOUS CRITERIA
@@ -81,6 +80,7 @@ moddat_qnr  <- filt_around_qnr(moddat, nmonths_total, "timeofquestionnaire_local
 moddat_qnr_timelim_count <- moddat_qnr %>%
   group_by(user_num) %>%
   summarise(nposts = n())
+
 moddat_qnr_timelim_count
 
 visualise_npostdist(moddat_qnr_timelim_count, str_c("number of months = ", nmonths_total), bwidth = 10)

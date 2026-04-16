@@ -43,8 +43,15 @@ source('00-functions.R')
 #---------------------------------------------------------------------------------------------------------------------------#
 #---------------------------------------------------------------------------------------------------------------------------#
 
-# if originally creating the discovery or confirmatory sample, set either 'making_AHdisc' or 'making_AHconf' true respectively
+# If originally creating the discovery or confirmatory sample, set either 'making_AHdisc' or 'making_AHconf' true respectively
 # otherwise make them both FALSE and skip to next step.
+
+# This part of thescript shows how the discovery and confirmatory sets were originally selected. Specifically, the discovery sample was 
+# taken as a random sample of 3000 of the subset of participants who had at least 500 posts. 
+# This was to ensure participants had enough posts for the initial exploratory analyses.
+# In this script, this 3000 includes 1000 who had already been viewed, plus 2000 more.
+# Then the confirmatory sample was all the remaining participants.
+# Note that this is before exclusions due to insufficient data etc, which happens later in the scripts.
 
 data_path        <- "./../../../../../../data/2022_EichstaedtTwitter/AH/" # input wherever raw data is kept
 
@@ -86,16 +93,16 @@ if (making_AHdisc) {
   extra_subset_size      <- 2000
   subset_size            <- extra_subset_size + 1000
   # get subset
-  user_subset_new      <- sample(unique_users_new, subset_size, replace = FALSE)
+  user_subset_new        <- sample(unique_users_new, subset_size, replace = FALSE)
   length(user_subset_new)
-  subset_df_new       <- subset(filt_raw_df_all_new, hashed_user_id %in% user_subset_new)
+  subset_df_new          <- subset(filt_raw_df_all_new, hashed_user_id %in% user_subset_new)
   
   ### combine new with old subset
   subset3000  <- rbind(subset_df_new, subset1000)
-  subset_size <- length(unique(subset3000$hashed_user_id))
+  subset_size_final <- length(unique(subset3000$hashed_user_id))
   
   # save subset
-  write_csv(subset3000, str_c(data_path, format(Sys.time(), "%y-%m-%d"), "_AHrandsubset", subset_size, ".csv"))
+  write_csv(subset3000, str_c(data_path, format(Sys.time(), "%y-%m-%d"), "_AHrandsubset", subset_size_final, ".csv"))
   
 } else if (making_AHconf) {
   
@@ -140,6 +147,7 @@ raw_df   <- dat; # create a new copy so that can always go back easily to the or
 ###### check basic attributes of raw dataset without making changes yet
 #---------------------------------------------------------------------------------------------------------------------------#
 
+
 #all columns have unique names
 paste0(length(distinct(raw_df))/ncol(raw_df) * 100, "% of columns are unique")
 
@@ -157,13 +165,18 @@ if(any(!grepl("^20", raw_df$created_at_utc))) {
   stop("Some tweet dates not created in 20, error given that data was from 2000s - check dataset before proceeding.")
 }
 
-# Check if all retweets have 0 likes 
+# Check if all retweets (RTs) have 0 likes but not necessarily 0 RTs
+# Note that RTs not having likes is a pecularity of the Twitter API at the time this dataset was acquired from it (2022-2023).
+# Specifically, if someone 'liked' a RT it would be attributed to the original tweet and RTs would always have 0 likes.
+# weirdly, the API stores the cumulative RTs for both the RT and original, but 0 of the likes.
+# We will later exclude all RTs from the datasets for analysis for this reason.
+
 # check_result will be TRUE if condition is satisfied
 RTs_have_no_likes    <- all(raw_df$is_retweet == FALSE | (raw_df$is_retweet == TRUE & is.na(raw_df$favorite_count)))
 print(RTs_have_no_likes)
 # Check if all retweets have 0 RTs
 RTs_have_no_retweets <- all(raw_df$is_retweet == FALSE | (raw_df$is_retweet == TRUE & is.na(raw_df$retweet_count)))
-print(RTs_have_no_retweets) # weirdly, the API stores the cumulative RTs for both the RT and original, but 0 of the likes. We just remove all RTs from this dataset.
+print(RTs_have_no_retweets)
 
 # inspect follower numbers for each user
 follower_nums <- raw_df %>% group_by(hashed_user_id) %>% slice(1) %>%ungroup() %>% dplyr::select(followers_count, dob)
@@ -257,7 +270,6 @@ if (any(is.nan(mod_df$t_post))){
   stop("NA t_posts - check dataset.")
 }
 
-
 ############### Apply initial pre-processing. ############### 
 
 # Note: the script 'pre-processing_twitter_data.R' has further preproc steps.
@@ -268,7 +280,7 @@ mod_df_preproc <- mod_df %>% rowid_to_column("row_index")
 ##########################################
 ## Group together groups of posts which were made in quick succession. 
 # IMPORTANTLY, as this step can reduce the number of posts per user, it must come 
-# BEFORE THE preprocessing step of deleting all users with less than 10 posts,
+# BEFORE THE preprocessing step of deleting all users with fewer than 10 posts,
 # so that any user that now loses enough of their posts to become below 10, is 
 # then deleted.
 ## Crucially, the models do not converge if t_post is too small.
@@ -280,10 +292,11 @@ mod_df_preproc <- mod_df %>% rowid_to_column("row_index")
 ## where consecutive posts all have a short t_post. These clumps are re-defined as a 
 ## single post, with the t_post as the first t_post in the clump (i.e., the last
 ## one before the first small t_post).
-## Currently it has 'max' for 'maximum'.
+## The likes on this new clumped post could have different values as a combination of 
+## the likes on the original short t_post. Here it is set to 'max' for 'maximum', but it could also be the mean, etc.
 
 # Define clumping parameters
-grouping_latency                         <- 300; # defined the latency to 'group' posts
+grouping_latency                         <- 300; # defined the latency to 'group' posts 
 grouping_latency_unit                    <- "s"; # unit of grouping latency & t_post, 's' = seconds, 'm' = minutes.
 mod_df_preproc %>% 
   group_by(user_num) %>% 
@@ -291,8 +304,8 @@ mod_df_preproc %>%
 
 # Apply changes to clumps: 
 # Here, we clump them by the 'max' 
-# as this is the number of likes people are likely to remember and thus be motivated by.
-mod_df_keep <- preprocess_clump(mod_df_preproc, max, grouping_latency) %>%
+# as we think this is the number of likes people are likely to remember and thus be motivated by.
+mod_df_clumped <- preprocess_clump(mod_df_preproc, max, grouping_latency) %>%
   dplyr::select(row_index, 
                 user_num,
                 likes, 
@@ -313,7 +326,7 @@ mod_df_keep <- preprocess_clump(mod_df_preproc, max, grouping_latency) %>%
                 )
 
 ### Sanity check - view to check clumping worked
-mod_df_check <- mod_df_preproc %>% left_join(mod_df_keep, mod_df_preproc, by = "row_index")
+mod_df_check <- mod_df_preproc %>% left_join(mod_df_clumped, mod_df_preproc, by = "row_index")
 # Check mod_df_check. Specifically, visually check that the cumulative number of 
 # likes/t_post/rts in left-out rows is combined using clumping_fun to result in the 
 # total in the clumped row just above the left-out clump. If it does, proceed to make mod_df_save.
@@ -330,10 +343,10 @@ postcount_df    <- mod_df_preproc %>%  # get the data of the users to be removed
   filter(insufficient_data == TRUE);
 users_remove    <- postcount_df$user_num; # get the list of users to be removed
 print(str_c("Users to remove: ", length(users_remove)))
-mod_df_keep  <- mod_df_keep %>% filter(!(user_num %in% users_remove))
+mod_df_clumped_usersRemoved  <- mod_df_clumped %>% filter(!(user_num %in% users_remove))
 
 ##### check how many users we have left now after all the preprocessing
-n_unique_users_mod <- length(unique(mod_df_keep$user_num))
+n_unique_users_mod <- length(unique(mod_df_clumped_usersRemoved$user_num))
 n_unique_users_mod
 
 ##########################################
@@ -358,26 +371,26 @@ mod_df_save_colnames      <- c("user_num",
                    paste("mintpost_", as.character(grouping_latency_unit), sep = "")
                    );
 
-mod_df_save                    <- as_tibble(matrix(nrow = nrow(mod_df_keep), ncol = length(mod_df_save_colnames)), .name_repair = ~ mod_df_save_colnames);
-mod_df_save$user_num           <- mod_df_keep$user_num;
-mod_df_save$likes              <- mod_df_keep$likes;
-mod_df_save$retweet_count      <- mod_df_keep$retweet_count;
-mod_df_save$t_post             <- mod_df_keep$t_post;
+mod_df_save                    <- as_tibble(matrix(nrow = nrow(mod_df_clumped_usersRemoved), ncol = length(mod_df_save_colnames)), .name_repair = ~ mod_df_save_colnames);
+mod_df_save$user_num           <- mod_df_clumped_usersRemoved$user_num;
+mod_df_save$likes              <- mod_df_clumped_usersRemoved$likes;
+mod_df_save$retweet_count      <- mod_df_clumped_usersRemoved$retweet_count;
+mod_df_save$t_post             <- mod_df_clumped_usersRemoved$t_post;
 mod_df_save %<>% 
   group_by(user_num) %>% 
   mutate(post_num_pic = row_number()) %>% 
   ungroup();
-mod_df_save$weekday            <- mod_df_keep$weekday
-mod_df_save$followers_count    <- mod_df_keep$followers_count
-mod_df_save$friends_count      <- mod_df_keep$friends_count
-mod_df_save$Authentic_Happiness_inventory <- mod_df_keep$Authentic_Happiness_inventory
-mod_df_save$gender             <- mod_df_keep$gender
-mod_df_save$datetime           <- mod_df_keep$datetime
-mod_df_save$DOB                <- mod_df_keep$DOB
-mod_df_save$timeofquestionnaire_local <- mod_df_keep$timeofquestionnaire_local
+mod_df_save$weekday            <- mod_df_clumped_usersRemoved$weekday
+mod_df_save$followers_count    <- mod_df_clumped_usersRemoved$followers_count
+mod_df_save$friends_count      <- mod_df_clumped_usersRemoved$friends_count
+mod_df_save$Authentic_Happiness_inventory <- mod_df_clumped_usersRemoved$Authentic_Happiness_inventory
+mod_df_save$gender             <- mod_df_clumped_usersRemoved$gender
+mod_df_save$datetime           <- mod_df_clumped_usersRemoved$datetime
+mod_df_save$DOB                <- mod_df_clumped_usersRemoved$DOB
+mod_df_save$timeofquestionnaire_local <- mod_df_clumped_usersRemoved$timeofquestionnaire_local
 ### add preprocessing params
-mod_df_save$is_clump           <- mod_df_keep$is_clump;
-mod_df_save$clumping_fun       <- mod_df_keep$clumping_fun;
+mod_df_save$is_clump           <- mod_df_clumped_usersRemoved$is_clump;
+mod_df_save$clumping_fun       <- mod_df_clumped_usersRemoved$clumping_fun;
 mod_df_save$min_userposts      <- min_userposts;
 mod_df_save[paste("mintpost_", grouping_latency_unit, sep = "")] <- grouping_latency;
 

@@ -40,6 +40,7 @@ library(viridis)
 library(gridExtra)
 library(here)
 library(metafor)
+library(boot)
 
 setwd(here("03-stats_and_visualisation"))
 source('00-functions.R')
@@ -58,7 +59,7 @@ source('00-functions.R')
 ## AH
 empdatAH_path              <- "./../../../../../../data/2022_EichstaedtTwitter/AH/"
 AHdisc_data_name_string    <- "241104_241104_241104_240228_AHdisc_cleaned_preproc_AICw"
-AHconf_data_name_string    <- "241105_241104_241104_240416_AHconf_cleaned_preproc_AICw"
+AHconf_data_name_string    <- "251110_251105_251105_240416_AHconf_cleaned_preproc_AICw"
 empdat_AHdisc              <- read_csv(str_c(empdatAH_path, AHdisc_data_name_string, ".csv"))
 empdat_AHconf              <- read_csv(str_c(empdatAH_path, AHconf_data_name_string, ".csv"))
 
@@ -75,8 +76,7 @@ empdat_AHdisc <- empdat_AHdisc %>%
  mutate(
    DOB                       = as.Date(paste(DOB, "-01", sep = "")),
    timeofquestionnaire_local = as.POSIXct(timeofquestionnaire_local, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-   age                       = as.numeric(difftime(timeofquestionnaire_local, DOB, units = "days") / 365.25),
-   timeonTwitter             = as.numeric(timeofquestionnaire_local - t_firstpost, units = "days") / 365.25) %>%
+   age                       = as.numeric(difftime(timeofquestionnaire_local, DOB, units = "days") / 365.25)) %>%
  group_by(user_num) %>%
  mutate(mean_tpost  = mean(t_post),
         mean_likes  = mean(likes)) %>%
@@ -86,8 +86,7 @@ empdat_AHconf <- empdat_AHconf %>%
   mutate(
     DOB                       = as.Date(paste(DOB, "-01", sep = "")),
     timeofquestionnaire_local = as.POSIXct(timeofquestionnaire_local, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-    age                       = as.numeric(difftime(timeofquestionnaire_local, DOB, units = "days") / 365.25),
-    timeonTwitter             = as.numeric(timeofquestionnaire_local - t_firstpost, units = "days") / 365.25) %>%
+    age                       = as.numeric(difftime(timeofquestionnaire_local, DOB, units = "days") / 365.25)) %>%
   group_by(user_num) %>%
   mutate(mean_tpost  = mean(t_post),
          mean_likes  = mean(likes)) %>%
@@ -95,13 +94,47 @@ empdat_AHconf <- empdat_AHconf %>%
 
 # # load simgens where they were all simulated with exact parameters of confirmatory sample
 simgen_AHconf_path <- str_c("./../../data_processed/Twitter/simgen/", AHconf_data_name_string, "/");
-simgen_FP_AHconf   <- read_csv(str_c(simgen_AHconf_path, "241106-0958FP.csv"))
-simgen_CP_AHconf   <- read_csv(str_c(simgen_AHconf_path, "241106-0959CP.csv"))
-simgen_PH_AHconf   <- read_csv(str_c(simgen_AHconf_path, "241106-1004PH.csv"))
-simgen_RL1_AHconf  <- read_csv(str_c(simgen_AHconf_path, "241106-1001RL1.csv"))
-simgen_RL2_AHconf  <- read_csv(str_c(simgen_AHconf_path, "241106-1002RL2.csv"))
-simgen_RLH1_AHconf <- read_csv(str_c(simgen_AHconf_path, "241106-1006RLH1.csv"))
-simgen_RLH2_AHconf <- read_csv(str_c(simgen_AHconf_path, "241106-1009RLH2.csv"))
+simgen_FP_AHconf   <- read_csv(str_c(simgen_AHconf_path, "251110-1710FP.csv"))
+simgen_CP_AHconf   <- read_csv(str_c(simgen_AHconf_path, "251110-1711CP.csv"))
+simgen_PH_AHconf   <- read_csv(str_c(simgen_AHconf_path, "251110-1716HP.csv"))   # Note that HP is the same as the PH model
+simgen_RL1_AHconf  <- read_csv(str_c(simgen_AHconf_path, "251110-1712RL1.csv"))
+simgen_RL2_AHconf  <- read_csv(str_c(simgen_AHconf_path, "251110-1714RL2.csv"))
+simgen_RLH1_AHconf <- read_csv(str_c(simgen_AHconf_path, "251110-1718RLH1.csv"))
+simgen_RLH2_AHconf <- read_csv(str_c(simgen_AHconf_path, "251110-1721RLH2.csv"))
+
+
+########################################
+
+# save versions for OSF
+
+
+#conf
+empdat_AHconf_OSF <- empdat_AHconf
+empdat_AHconf_OSF$user_num <- as.integer(factor(empdat_AHconf_OSF$user_num))
+empdat_AHconf_OSF <- select(empdat_AHconf_OSF, 
+                            -weekday, 
+                            -datetime, 
+                            -DOB, 
+                            -timeofquestionnaire_local,
+                            -t_firstpost
+                            )
+write_csv(empdat_AHconf_OSF,str_c(empdatAH_path,AHconf_data_name_string, "_OSF.csv"))
+
+#disc
+empdat_AHdisc_OSF <- empdat_AHdisc
+empdat_AHdisc_OSF$user_num <- as.integer(factor(empdat_AHdisc_OSF$user_num))
+empdat_AHdisc_OSF <- select(empdat_AHdisc_OSF, 
+                            -weekday, 
+                            -datetime, 
+                            -DOB, 
+                            -timeofquestionnaire_local,
+                            -t_firstpost
+)
+write_csv(empdat_AHdisc_OSF,str_c(empdatAH_path,AHdisc_data_name_string, "_OSF.csv"))
+
+
+
+########################################
 
 
 #-----------------------------------------------------------------------------------#
@@ -114,17 +147,17 @@ simgen_RLH2_AHconf <- read_csv(str_c(simgen_AHconf_path, "241106-1009RLH2.csv"))
 
 
 #### models
-glmdat_sim_FP_AHconf   <- mkvars_glm(simgen_FP_AHconf)
-glmdat_sim_CP_AHconf   <- mkvars_glm(simgen_CP_AHconf)
-glmdat_sim_PH_AHconf   <- mkvars_glm(simgen_PH_AHconf)
-glmdat_sim_RL1_AHconf  <- mkvars_glm(simgen_RL1_AHconf)
-glmdat_sim_RL2_AHconf  <- mkvars_glm(simgen_RL2_AHconf)
-glmdat_sim_RLH1_AHconf <- mkvars_glm(simgen_RLH1_AHconf)
-glmdat_sim_RLH2_AHconf <- mkvars_glm(simgen_RLH2_AHconf)
+glmdat_sim_FP_AHconf   <- mkvars_glm(simgen_FP_AHconf, RPE_type = "prev10")
+glmdat_sim_CP_AHconf   <- mkvars_glm(simgen_CP_AHconf, RPE_type = "prev10")
+glmdat_sim_PH_AHconf   <- mkvars_glm(simgen_PH_AHconf, RPE_type = "prev10")
+glmdat_sim_RL1_AHconf  <- mkvars_glm(simgen_RL1_AHconf, RPE_type = "prev10")
+glmdat_sim_RL2_AHconf  <- mkvars_glm(simgen_RL2_AHconf, RPE_type = "prev10")
+glmdat_sim_RLH1_AHconf <- mkvars_glm(simgen_RLH1_AHconf, RPE_type = "prev10")
+glmdat_sim_RLH2_AHconf <- mkvars_glm(simgen_RLH2_AHconf, RPE_type = "prev10")
 
 #### empirical
-glmdat_empdatAHdisc   <- mkvars_glm(empdat_AHdisc)
-glmdat_empdatAHconf   <- mkvars_glm(empdat_AHconf)
+glmdat_empdatAHdisc   <- mkvars_glm(empdat_AHdisc, RPE_type = "prev10")
+glmdat_empdatAHconf   <- mkvars_glm(empdat_AHconf, RPE_type = "prev10")
 
 
 #-----------------------------------------------------------------------------------#
@@ -145,14 +178,24 @@ glmdat_empdatAHconf   <- mkvars_glm(empdat_AHconf)
 glmRPE_sim_FP_AHconf   <- glmdat_sim_FP_AHconf %>% glm_RPE_deltatpost(.)
 glmRPE_sim_CP_AHconf   <- glmdat_sim_CP_AHconf %>% glm_RPE_deltatpost(.)
 glmRPE_sim_PH_AHconf   <- glmdat_sim_PH_AHconf %>% glm_RPE_deltatpost(.)
-glmRPE_sim_RL1_AHconf  <- glmdat_sim_RL1_AHconf %>% glm_RPE_deltatpost(.)
-glmRPE_sim_RL2_AHconf  <- glmdat_sim_RL2_AHconf %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL1_AHconf  <- glmdat_sim_RL1_AHconf  %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL2_AHconf  <- glmdat_sim_RL2_AHconf  %>% glm_RPE_deltatpost(.)
 glmRPE_sim_RLH1_AHconf <- glmdat_sim_RLH1_AHconf %>% glm_RPE_deltatpost(.)
 glmRPE_sim_RLH2_AHconf <- glmdat_sim_RLH2_AHconf %>% glm_RPE_deltatpost(.)
-
 # all empdat
 glmRPE_empdatAHconf    <- glmdat_empdatAHconf %>% glm_RPE_deltatpost(.)
 
+#### run GLMs for model-independent signature of habit
+### AutoCorr
+glmAuto_sim_FP_AHconf   <- glmdat_sim_FP_AHconf %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_CP_AHconf   <- glmdat_sim_CP_AHconf %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_PH_AHconf   <- glmdat_sim_PH_AHconf %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_RL1_AHconf  <- glmdat_sim_RL1_AHconf  %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_RL2_AHconf  <- glmdat_sim_RL2_AHconf  %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_RLH1_AHconf <- glmdat_sim_RLH1_AHconf %>% glm_AutoCorr_tpost(.)
+glmAuto_sim_RLH2_AHconf <- glmdat_sim_RLH2_AHconf %>% glm_AutoCorr_tpost(.)
+# all empdat
+glmAuto_empdatAHconf    <- glmdat_empdatAHconf %>% glm_AutoCorr_tpost(.)
 
 
 #-----------------------------------------------------------------------------------#
@@ -175,32 +218,35 @@ scatterdat_sim_AHconf <- data.frame(simgen_FP_pol                = filter(simgen
                                     simgen_CP_b                  = filter(simgen_CP_AHconf, post_num_pic==1)$b,
                                     simgen_CP_c                  = filter(simgen_CP_AHconf, post_num_pic==1)$c,
 
-                                    simgen_PH_alphAc             = filter(simgen_PH_AHconf, post_num_pic==1)$alpha_action,
+                                    simgen_PH_alpha_action       = filter(simgen_PH_AHconf, post_num_pic==1)$alpha_action,
 
-                                    simgen_RL1_alph              = filter(simgen_RL1_AHconf, post_num_pic ==1)$alpha ,
-                                    simgen_RL1_cost              = filter(simgen_RL1_AHconf, post_num_pic ==1)$cost ,
+                                    simgen_RL1_alpha_reward      = filter(simgen_RL1_AHconf, post_num_pic ==1)$alpha_reward,
+                                    simgen_RL1_cost_constant     = filter(simgen_RL1_AHconf, post_num_pic ==1)$cost_constant,
 
                                     simgen_RL2_alph_P            = filter(simgen_RL2_AHconf, post_num_pic==1)$alpha_P,
                                     simgen_RL2_alph_N            = filter(simgen_RL2_AHconf, post_num_pic==1)$alpha_N,
-                                    simgen_RL2_cost              = filter(simgen_RL2_AHconf, post_num_pic==1)$cost,
+                                    simgen_RL2_cost_constant     = filter(simgen_RL2_AHconf, post_num_pic==1)$cost_constant,
 
-                                    simgen_RLH1_alph             = filter(simgen_RLH1_AHconf, post_num_pic==1)$alpha,
-                                    simgen_RLH1_cost             = filter(simgen_RLH1_AHconf, post_num_pic==1)$cost,
-                                    simgen_RLH1_alphAc           = filter(simgen_RLH1_AHconf, post_num_pic==1)$alpha_action,
-                                    simgen_RLH1_stickweight      = filter(simgen_RLH1_AHconf, post_num_pic==1)$stickiness_weight,
+                                    simgen_RLH1_alph             = filter(simgen_RLH1_AHconf, post_num_pic==1)$alpha_reward,
+                                    simgen_RLH1_cost             = filter(simgen_RLH1_AHconf, post_num_pic==1)$cost_constant,
+                                    simgen_RLH1_alpha_action     = filter(simgen_RLH1_AHconf, post_num_pic==1)$alpha_action,
+                                    simgen_RLH1_habit_weight     = filter(simgen_RLH1_AHconf, post_num_pic==1)$habit_weight,
 
                                     simgen_RLH2_alph_P           = filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_P,
                                     simgen_RLH2_alph_N           = filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_N,
-                                    simgen_RLH2_cost             = filter(simgen_RLH2_AHconf, post_num_pic==1)$cost,
-                                    simgen_RLH2_alphAc           = filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_action,
-                                    simgen_RLH2_stickweight        = filter(simgen_RLH2_AHconf, post_num_pic==1)$stickiness_weight,
+                                    simgen_RLH2_cost_constant    = filter(simgen_RLH2_AHconf, post_num_pic==1)$cost_constant,
+                                    simgen_RLH2_alpha_action     = filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_action,
+                                    simgen_RLH2_habit_weight     = filter(simgen_RLH2_AHconf, post_num_pic==1)$habit_weight,
 
                                     simgen_RL2_posbias           = filter(simgen_RL2_AHconf, post_num_pic==1)$alpha_P - filter(simgen_RL2_AHconf, post_num_pic==1)$alpha_N,
                                     simgen_RLH2_posbias          = filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_P - filter(simgen_RLH2_AHconf, post_num_pic==1)$alpha_N,
 
                                     simgen_RL1_beta_RPE    = as.data.frame(ranef(glmRPE_sim_RL1_AHconf))$condval,
                                     simgen_RLH1_beta_RPE   = as.data.frame(ranef(glmRPE_sim_RLH1_AHconf))$condval,
-                                    simgen_RLH2_beta_RPE   = as.data.frame(ranef(glmRPE_sim_RLH2_AHconf))$condval
+                                    simgen_RLH2_beta_RPE   = as.data.frame(ranef(glmRPE_sim_RLH2_AHconf))$condval,
+                                    
+                                    simgen_RLH1_beta_Auto  =  subset(as.data.frame(ranef(glmAuto_sim_RLH1_AHconf)), term == "scaled_lag_log_tpost")$condval
+                                    
                                     )
 
 
@@ -212,25 +258,25 @@ scatterdat_emp_AHdisc <- data.frame(emp_FP_pol       = filter(empdat_AHdisc, pos
                                     eemp_CP_b         = filter(empdat_AHdisc, post_num_pic==1)$b.fitdat_CP,
                                     emp_CP_c         = filter(empdat_AHdisc, post_num_pic==1)$c.fitdat_CP,
                                     # 
-                                    emp_PH_alphAc    = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_PH,
+                                    emp_HP_alpha_action  = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_PH,
                                     # 
-                                    emp_RL1_alph     = filter(empdat_AHdisc, post_num_pic==1)$alpha.fitdat_RL1,
-                                    emp_RL1_cost     = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RL1,
+                                    emp_RL1_alpha_reward = filter(empdat_AHdisc, post_num_pic==1)$alpha.fitdat_RL1, # In the discovery dataset the variables are 'alpha' instead of 'alpha_reward', 'stickiness_weight' instead of 'habit_weight' and 'cost' instead of 'cost_constant'
+                                    emp_RL1_cost_constant= filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RL1,
                                         
-                                    emp_RL2_alph_P    = filter(empdat_AHdisc, post_num_pic==1)$alpha_P.fitdat_RL2,
-                                    emp_RL2_alph_N    = filter(empdat_AHdisc, post_num_pic==1)$alpha_N.fitdat_RL2,
-                                    emp_RL2_cost      = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RL2,
+                                    emp_RL2_alph_P        = filter(empdat_AHdisc, post_num_pic==1)$alpha_P.fitdat_RL2,
+                                    emp_RL2_alph_N        = filter(empdat_AHdisc, post_num_pic==1)$alpha_N.fitdat_RL2,
+                                    emp_RL2_cost_constant = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RL2,
                                     
-                                    emp_RLH1_alph     = filter(empdat_AHdisc, post_num_pic==1)$alpha.fitdat_RLH1,
-                                    emp_RLH1_cost     = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RLH1,
-                                    emp_RLH1_alphAc   = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_RLH1,
-                                    emp_RLH1_stickweight = filter(empdat_AHdisc, post_num_pic==1)$stickiness_weight.fitdat_RLH1,
+                                    emp_RLH1_alpha_reward = filter(empdat_AHdisc, post_num_pic==1)$alpha.fitdat_RLH1,
+                                    emp_RLH1_cost_constant= filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RLH1,
+                                    emp_RLH1_alpha_action = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_RLH1,
+                                    emp_RLH1_habit_weight = filter(empdat_AHdisc, post_num_pic==1)$stickiness_weight.fitdat_RLH1,
                                     
-                                    emp_RLH2_alph_P     = filter(empdat_AHdisc, post_num_pic==1)$alpha_P.fitdat_RLH2,
-                                    emp_RLH2_alph_N     = filter(empdat_AHdisc, post_num_pic==1)$alpha_N.fitdat_RLH2,
-                                    emp_RLH2_cost       = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RLH2,
-                                    emp_RLH2_alphAc    = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_RLH2,
-                                    emp_RLH2_stickweight  = filter(empdat_AHdisc, post_num_pic==1)$stickiness_weight.fitdat_RLH2,
+                                    emp_RLH2_alph_P        = filter(empdat_AHdisc, post_num_pic==1)$alpha_P.fitdat_RLH2,
+                                    emp_RLH2_alph_N        = filter(empdat_AHdisc, post_num_pic==1)$alpha_N.fitdat_RLH2,
+                                    emp_RLH2_cost_constant = filter(empdat_AHdisc, post_num_pic==1)$cost.fitdat_RLH2,
+                                    emp_RLH2_alpha_action  = filter(empdat_AHdisc, post_num_pic==1)$alpha_action.fitdat_RLH2,
+                                    emp_RLH2_habit_weight  = filter(empdat_AHdisc, post_num_pic==1)$stickiness_weight.fitdat_RLH2,
                                     
                                     emp_RL2_posbias = filter(empdat_AHdisc, post_num_pic==1)$alpha_P.fitdat_RL2 - 
                                       filter(empdat_AHdisc, post_num_pic==1)$alpha_N.fitdat_RL2,
@@ -247,31 +293,36 @@ scatterdat_emp_AHdisc <- data.frame(emp_FP_pol       = filter(empdat_AHdisc, pos
                                     user_num         = filter(empdat_AHdisc, post_num_pic==1)$user_num
                                     )
 
+
+nPost_AHconf <- empdat_AHconf %>%
+  group_by(user_num) %>%
+  summarise(nposts = n())
+
 scatterdat_emp_AHconf <- data.frame(emp_FP_pol       = filter(empdat_AHconf, post_num_pic==1)$policy.fitdat_FP,
                                     
                                     emp_CP_a         = filter(empdat_AHconf, post_num_pic==1)$a.fitdat_CP,
                                     emp_CP_b         = filter(empdat_AHconf, post_num_pic==1)$b.fitdat_CP,
                                     emp_CP_c         = filter(empdat_AHconf, post_num_pic==1)$c.fitdat_CP,
                                     # 
-                                    emp_PH_alphAc    = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_PH,
+                                    emp_HP_alpha_action   = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_HP,
                                     
-                                    emp_RL1_alph     = filter(empdat_AHconf, post_num_pic==1)$alpha.fitdat_RL1,
-                                    emp_RL1_cost     = filter(empdat_AHconf, post_num_pic==1)$cost.fitdat_RL1,
+                                    emp_RL1_alpha_reward  = filter(empdat_AHconf, post_num_pic==1)$alpha_reward.fitdat_RL1,
+                                    emp_RL1_cost_constant = filter(empdat_AHconf, post_num_pic==1)$cost_constant.fitdat_RL1,
                                     
-                                    emp_RL2_alph_P    = filter(empdat_AHconf, post_num_pic==1)$alpha_P.fitdat_RL2,
-                                    emp_RL2_alph_N    = filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RL2,
-                                    emp_RL2_cost      = filter(empdat_AHconf, post_num_pic==1)$cost.fitdat_RL2,
+                                    emp_RL2_alph_P        = filter(empdat_AHconf, post_num_pic==1)$alpha_P.fitdat_RL2,
+                                    emp_RL2_alph_N        = filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RL2,
+                                    emp_RL2_cost_constant = filter(empdat_AHconf, post_num_pic==1)$cost_constant.fitdat_RL2,
                                     
-                                    emp_RLH1_alph     = filter(empdat_AHconf, post_num_pic==1)$alpha.fitdat_RLH1,
-                                    emp_RLH1_cost     = filter(empdat_AHconf, post_num_pic==1)$cost.fitdat_RLH1,
-                                    emp_RLH1_alphAc  = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_RLH1,
-                                    emp_RLH1_stickweight = filter(empdat_AHconf, post_num_pic==1)$stickiness_weight.fitdat_RLH1,
+                                    emp_RLH1_alpha_reward = filter(empdat_AHconf, post_num_pic==1)$alpha_reward.fitdat_RLH1,
+                                    emp_RLH1_cost_conatant= filter(empdat_AHconf, post_num_pic==1)$cost_constant.fitdat_RLH1,
+                                    emp_RLH1_alpha_action = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_RLH1,
+                                    emp_RLH1_habit_weight = filter(empdat_AHconf, post_num_pic==1)$habit_weight.fitdat_RLH1,
                                     
-                                    emp_RLH2_alph_P     = filter(empdat_AHconf, post_num_pic==1)$alpha_P.fitdat_RLH2,
-                                    emp_RLH2_alph_N     = filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RLH2,
-                                    emp_RLH2_cost       = filter(empdat_AHconf, post_num_pic==1)$cost.fitdat_RLH2,
-                                    emp_RLH2_alphAc    = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_RLH2,
-                                    emp_RLH2_stickweight  = filter(empdat_AHconf, post_num_pic==1)$stickiness_weight.fitdat_RLH2,
+                                    emp_RLH2_alph_P       = filter(empdat_AHconf, post_num_pic==1)$alpha_P.fitdat_RLH2,
+                                    emp_RLH2_alph_N       = filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RLH2,
+                                    emp_RLH2_cost_constant= filter(empdat_AHconf, post_num_pic==1)$cost_constant.fitdat_RLH2,
+                                    emp_RLH2_alpha_action = filter(empdat_AHconf, post_num_pic==1)$alpha_action.fitdat_RLH2,
+                                    emp_RLH2_habit_weight = filter(empdat_AHconf, post_num_pic==1)$habit_weight.fitdat_RLH2,
                                     
                                     emp_RL2_posbias = filter(empdat_AHconf, post_num_pic==1)$alpha_P.fitdat_RL2 - 
                                       filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RL2,
@@ -279,13 +330,15 @@ scatterdat_emp_AHconf <- data.frame(emp_FP_pol       = filter(empdat_AHconf, pos
                                       filter(empdat_AHconf, post_num_pic==1)$alpha_N.fitdat_RLH2,
                                     
                                     emp_beta_RPE         = as.data.frame(ranef(glmRPE_empdatAHconf))$condval,
-                                    
+                                    emp_beta_Auto        = subset(as.data.frame(ranef(glmAuto_empdatAHconf)), term == "scaled_lag_log_tpost")$condval,
+
                                     empdat_AHscore          = filter(empdat_AHconf, post_num_pic==1)$Authentic_Happiness_inventory,
                                     empdat_followercount    = filter(empdat_AHconf, post_num_pic==1)$followers_count,
                                     empdat_mean_tpost_days  = filter(empdat_AHconf, post_num_pic==1)$mean_tpost,
                                     empdat_mean_likes       = filter(empdat_AHconf, post_num_pic==1)$mean_likes,
                                     
-
+                                    empdat_nPosts           = nPost_AHconf$nposts,
+                                    
                                     age              = filter(empdat_AHconf, post_num_pic==1)$age,
                                     gender           = as.factor(filter(empdat_AHconf, post_num_pic==1)$gender),
                                     user_num         = filter(empdat_AHconf, post_num_pic==1)$user_num
@@ -317,13 +370,17 @@ gender_palette <- c("Male" = "darkblue", "Female" = "darkred")
 ##################################
 
 ### tpost vs. policy
-user1_num <- unique(empdat_AHconf$user_num)[3]; # which user you want to plot
+user1_num <- unique(empdat_AHconf$user_num)[7]; # which user you want to plot
 user1 <- ggplot(filter(empdat_AHconf, user_num == user1_num)) +
   geom_line(aes(x = post_num_pic, y = t_post), color = color5, linewidth = 1) +
-  geom_point(aes(x = post_num_pic, y = likes, stroke = NA), color = "#FFB347", size = 1.5) +
+  geom_point(aes(x = post_num_pic, y = likes),
+             color = "#FFB347", size = 1.5) +
   xlab("Post Number") +
-  ylab("Simulated T_Post") + 
+  ylab("Simulated T_Post") +
   theme_classic() +
+  theme(
+    axis.text.y = element_blank(),   # remove y-axis numbers
+  ) +
   ggtitle(str_c("User ", user1_num))
 user2_num <- unique(empdat_AHconf$user_num)[15]; # which user you want to plot
 user2 <- ggplot(filter(empdat_AHconf, user_num == user2_num)) +
@@ -332,6 +389,9 @@ user2 <- ggplot(filter(empdat_AHconf, user_num == user2_num)) +
   xlab("Post Number") +
   ylab("Simulated T_Post") + 
   theme_classic() +
+  theme(
+    axis.text.y = element_blank(),   # remove y-axis numbers
+  ) +
   ggtitle(str_c("User ", user2_num))
 user3_num <- unique(empdat_AHconf$user_num)[13]; # which user you want to plot
 user3 <- ggplot(filter(empdat_AHconf, user_num == user3_num)) +
@@ -339,7 +399,12 @@ user3 <- ggplot(filter(empdat_AHconf, user_num == user3_num)) +
   geom_point(aes(x = post_num_pic, y = likes, stroke = NA), color = "#FFB347", size = 1.5) +
   xlab("Post Number") +
   ylab("Simulated T_Post") + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
   theme_classic() +
+  theme(
+    axis.text.y = element_blank(),   # remove y-axis numbers
+  ) +
   ggtitle(str_c("User ", user3_num))
 
 ##################################
@@ -395,8 +460,53 @@ Fig1 <- grid.arrange(
   heights = c(1, 0.2, 1)  # Control relative height of each row (0.2 for the spacer)
 )
 
-ggsave("figures/Fig1.png", plot = Fig1, width = 17, height = 10, units = "in")
 
+# save figure
+ggsave("figures/Fig1.pdf", plot = Fig1, width = 17, height = 10, units = "in")
+# save source data
+## Fig1 Source Data
+fig1_data <- list(
+  a_user1_Tpost = filter(empdat_AHconf, user_num == user1_num)$t_post,
+  a_user1_likes = filter(empdat_AHconf, user_num == user1_num)$likes,
+  a_user2_Tpost = filter(empdat_AHconf, user_num == user2_num)$t_post,
+  a_user2_likes = filter(empdat_AHconf, user_num == user2_num)$likes,
+  a_user3_Tpost = filter(empdat_AHconf, user_num == user3_num)$t_post,
+  a_user3_likes = filter(empdat_AHconf, user_num == user3_num)$likes,
+  c_AHdisc_age                           = scatterdat_emp_age_AHdisc$age,
+  d_AHdisc_meantpost                     = scatterdat_emp_AHdisc$empdat_mean_tpost_days,
+  e_AHdisc_AHIscore                      = scatterdat_emp_AHdisc$empdat_AHscore,
+  f_AHdisc_followers_ageOutliersexcluded = scatterdat_emp_age_AHdisc$empdat_followercount,
+  f_AHdisc_meantpost_ageOutliersexcluded = scatterdat_emp_age_AHdisc$empdat_mean_tpost_days,
+  f_AHdisc_AHI_ageOutliersexcluded       = scatterdat_emp_age_AHdisc$empdat_AHscore,
+  g_AHconf_age                           = scatterdat_emp_age_AHconf$age,
+  h_AHconf_meantpost                     = scatterdat_emp_AHconf$empdat_mean_tpost_days,
+  i_AHconf_AHIscore                      = scatterdat_emp_AHconf$empdat_AHscore,
+  j_AHconf_followers_ageOutliersexcluded = scatterdat_emp_age_AHconf$empdat_followercount,
+  j_AHconf_meantpost_ageOutliersexcluded = scatterdat_emp_age_AHconf$empdat_mean_tpost_days,
+  j_AHconf_AHI_ageOutliersexcluded       = scatterdat_emp_age_AHconf$empdat_AHscore
+  
+)
+max_len_fig1 <- max(lengths(fig1_data))
+fig1_padded <- lapply(fig1_data, function(x) { length(x) <- max_len_fig1; x })
+data_fig1   <- as.data.frame(fig1_padded)
+write_csv(data_fig1, "source_data/data_fig1.csv")
+
+
+
+# Desired final length
+target_length <- 1558
+
+# Build data frame with direct padding using length<-
+data_fig1 <- data.frame(
+  c_AHdisc_age         = `length<-`(scatterdat_emp_age_AHdisc$age, target_length),
+  d_AHdisc_mean_tpost  = `length<-`(scatterdat_emp_AHdisc$empdat_mean_tpost_days, target_length),
+  e_AHdisc_AHI         = `length<-`(scatterdat_emp_AHdisc$empdat_AHscore, target_length),
+  f_AHdisc_followcount = `length<-`(scatterdat_emp_AHdisc$empdat_followercount, target_length),
+  g_AHconf_age         = `length<-`(scatterdat_emp_age_AHconf$age, target_length),
+  h_AHconf_mean_tpost  = `length<-`(scatterdat_emp_AHconf$empdat_mean_tpost_days, target_length),
+  i_AHconf_AHI         = `length<-`(scatterdat_emp_AHconf$empdat_AHscore, target_length),
+  j_AHconf_followcount = `length<-`(scatterdat_emp_AHconf$empdat_followercount, target_length)
+)
 
 ################
 # Figure 3: Model Selection
@@ -412,7 +522,7 @@ AHdisc_mean_AICw <- empdat_AHdisc %>% filter(post_num_pic == 1) %>%
   summarise(
     meanAICw_FP   = mean(AICw_FP),
     meanAICw_CP   = mean(AICw_CP),
-    meanAICw_PH   = mean(AICw_PH),
+    meanAICw_HP   = mean(AICw_PH),  ## originally called PH in this dataset
     meanAICw_RL1  = mean(AICw_RL1),
     meanAICw_RL2  = mean(AICw_RL2),
     meanAICw_RLH1 = mean(AICw_RLH1),
@@ -426,7 +536,7 @@ AHconf_mean_AICw <- empdat_AHconf %>% filter(post_num_pic == 1) %>%
   summarise(
     meanAICw_FP   = mean(AICw_FP),
     meanAICw_CP   = mean(AICw_CP),
-    meanAICw_PH   = mean(AICw_PH),
+    meanAICw_HP   = mean(AICw_HP),
     meanAICw_RL1  = mean(AICw_RL1),
     meanAICw_RL2  = mean(AICw_RL2),
     meanAICw_RLH1 = mean(AICw_RLH1),
@@ -466,11 +576,59 @@ glmRPE_list_AHconf <- list(
   glmRPE_empdatAHconf    = glmRPE_empdatAHconf
 )
 
-modfals_fig <- plot_glm_forest(glmRPE_list_AHconf, dataset_names_AHconf, 
+modfals_fig_prev10 <- plot_glm_forest(glmRPE_list_AHconf, dataset_names_AHconf, 
                                      glm_colour_palette, 
                                      pred_varname = "scaled_lag_RPE", 
                                      dep_varname  = "scaled_delta_logtpost")
 
+
+##################################
+# Stats
+
+summary(glmRPE_sim_FP_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_FP_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_FP_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_FP_AHconf)$CI_high
+
+summary(glmRPE_sim_CP_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_CP_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_CP_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_CP_AHconf)$CI_high
+
+summary(glmRPE_sim_PH_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_PH_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_PH_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_PH_AHconf)$CI_high
+
+summary(glmRPE_sim_RL1_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RL1_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RL1_AHconf)$Std_Coefficient
+effectsize::standardize_parameters(glmRPE_sim_RL1_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_RL1_AHconf)$CI_high
+
+summary(glmRPE_sim_RL2_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RL2_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RL2_AHconf)$Std_Coefficient
+effectsize::standardize_parameters(glmRPE_sim_RL2_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_RL2_AHconf)$CI_high
+
+summary(glmRPE_sim_RLH1_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RLH1_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RLH1_AHconf)$Std_Coefficient
+effectsize::standardize_parameters(glmRPE_sim_RLH1_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_RLH1_AHconf)$CI_high
+
+summary(glmRPE_sim_RLH2_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RLH2_AHconf)
+effectsize::standardize_parameters(glmRPE_sim_RLH2_AHconf)$Std_Coefficient
+effectsize::standardize_parameters(glmRPE_sim_RLH2_AHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_sim_RLH2_AHconf)$CI_high
+
+summary(glmRPE_empdatAHconf)
+effectsize::standardize_parameters(glmRPE_empdatAHconf)
+effectsize::standardize_parameters(glmRPE_empdatAHconf)$Std_Coefficient
+effectsize::standardize_parameters(glmRPE_empdatAHconf)$CI_low
+effectsize::standardize_parameters(glmRPE_empdatAHconf)$CI_high
 
 #########
 # Arrange Fig 3
@@ -486,14 +644,38 @@ Fig3_layout_matrix <- rbind(
 
 # Arrange plots with added space
 Fig3 <- grid.arrange(
-  modcomp_fig, modfals_fig, 
+  modcomp_fig, modfals_fig_prev10, 
   layout_matrix = Fig3_layout_matrix,
   widths = c(1.8, 0.5, 1.1),  # Control relative height of each row (0.2 for the spacer),
   heights = 1
 )
 
+ggsave("figures/Fig3.pdf", plot = Fig3, width = 17, height = 8, units = "in")
 
-ggsave("figures/Fig3.png", plot = Fig3, width = 17, height = 8, units = "in")
+### Fig3b Source Data
+# Note that in the figure, 95% CI is plotted, which can be obtained from the Std. error using the transformation upper / lower CI = beta +/- 1.96 * SE
+fig3b_data <- list(
+  a_simFP_BetaRPE_fixef_est_prev10      = summary(glmRPE_sim_FP_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simFP_BetaRPE_fixef_stdErr_prev10   = summary(glmRPE_sim_FP_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simCP_BetaRPE_fixef_est_prev10      = summary(glmRPE_sim_CP_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simCP_BetaRPE_fixef_stdErr_prev10   = summary(glmRPE_sim_CP_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simHP_BetaRPE_fixef_est_prev10      = summary(glmRPE_sim_PH_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simHP_BetaRPE_fixef_stdErr_prev10   = summary(glmRPE_sim_PH_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRL1_BetaRPE_fixef_est_prev10     = summary(glmRPE_sim_RL1_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRL1_BetaRPE_fixef_stdErr_prev10  = summary(glmRPE_sim_RL1_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRL2_BetaRPE_fixef_est_prev10     = summary(glmRPE_sim_RL2_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRL2_BetaRPE_fixef_stdErr_prev10  = summary(glmRPE_sim_RL2_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRLH1_BetaRPE_fixef_est_prev10    = summary(glmRPE_sim_RLH1_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRLH1_BetaRPE_fixef_stdErr_prev10 = summary(glmRPE_sim_RLH1_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRLH2_BetaRPE_fixef_est_prev10    = summary(glmRPE_sim_RLH2_AHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRLH2_BetaRPE_fixef_stdErr_prev10 = summary(glmRPE_sim_RLH2_AHconf)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_emp_BetaRPE_fixef_est_prev10    = summary(glmRPE_empdatAHconf)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_emp_BetaRPE_fixef_stdErr_prev10 = summary(glmRPE_empdatAHconf)$coefficients["scaled_lag_RPE", "Std. Error"]
+  )
+max_len_fig3b <- max(lengths(fig3b_data))
+fig3b_padded <- lapply(fig3b_data, function(x) { length(x) <- max_len_fig3b; x })
+data_fig3b   <- as.data.frame(fig3b_padded)
+write_csv(data_fig3b, "source_data/data_fig3b.csv")
 
 ##################################
 ##################################
@@ -504,26 +686,75 @@ ggsave("figures/Fig3.png", plot = Fig3, width = 17, height = 8, units = "in")
 
 ##################################
 # Stats
-AHd_alphR_meantpost_mod <- lm(emp_RLH1_alph ~ empdat_mean_tpost_days, data = scatterdat_emp_AHdisc)
+AHd_alphR_meantpost_mod <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHdisc)
 summary(AHd_alphR_meantpost_mod)
-AHc_stickweight_meantpost_mod <- lm(emp_RLH1_stickweight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
-summary(AHc_stickweight_meantpost_mod)
-AHc_alphAc_meantpost_mod <- lm(emp_RLH1_alphAc ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod)$CI_low
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod)$CI_high
+
+AHc_habweight_meantpost_mod <- lm(emp_RLH1_habit_weight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
+summary(AHc_habweight_meantpost_mod)
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod)$CI_low
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod)$CI_high
+
+AHc_alphAc_meantpost_mod <- lm(emp_RLH1_alpha_action ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphAc_meantpost_mod)
-AHc_alphR_meantpost_mod <- lm(emp_RLH1_alph ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod)$CI_high
+
+AHc_alphR_meantpost_mod <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphR_meantpost_mod)
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod)$CI_low
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod)$CI_high
+
+
 # Meta-analysis
+std_AHd <- effectsize::standardize_parameters(AHd_alphR_meantpost_mod)
+std_AHc <- effectsize::standardize_parameters(AHc_alphR_meantpost_mod)
 meta_alphRLH1_meantpost <- rma(
-  yi  = c(coef(AHd_alphR_meantpost_mod)["empdat_mean_tpost_days"][[1]], coef(AHc_alphR_meantpost_mod)["empdat_mean_tpost_days"][[1]]),
-  sei = c(summary(AHd_alphR_meantpost_mod)$coefficients["empdat_mean_tpost_days", "Std. Error"], summary(AHc_alphR_meantpost_mod)$coefficients["empdat_mean_tpost_days", "Std. Error"])
+  yi = c(std_AHd$Std_Coefficient[2],
+         std_AHc$Std_Coefficient[2]),
+  sei = c(
+    (std_AHd$CI_high[2] - std_AHd$CI_low[2]) / (2 * 1.96),
+    (std_AHc$CI_high[2] - std_AHc$CI_low[2]) / (2 * 1.96)),
+  method = "REML"
 )
 summary(meta_alphRLH1_meantpost)
-forest(meta_alphRLH1_meantpost)
+
+
+## Sensitivity analysis controlling for number of posts
+AHc_habweight_meantpost_mod_ctrl <- lm(emp_RLH1_habit_weight ~ empdat_mean_tpost_days + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_habweight_meantpost_mod_ctrl)
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_ctrl)$CI_high
+
+AHc_alphAc_meantpost_mod_ctrl <- lm(emp_RLH1_alpha_action ~ empdat_mean_tpost_days + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphAc_meantpost_mod_ctrl)
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_ctrl)$CI_high
+
+AHc_alphR_meantpost_mod_ctrl_nPosts <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphR_meantpost_mod_ctrl_nPosts)
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_ctrl_nPosts)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_ctrl_nPosts)$CI_low
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_ctrl_nPosts)$CI_high
+
+AHc_alphN_meantpost_mod_ctrl_nPosts <- lm(emp_RLH2_alph_N ~ empdat_mean_tpost_days + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphN_meantpost_mod_ctrl_nPosts)
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_ctrl_nPosts)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_ctrl_nPosts)$CI_low
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_ctrl_nPosts)$CI_high
+
 
 #### Fig 4 in main paper with outliers removed
-AHconf_stickweight_lims <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_stickweight", x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
-AHconf_alphAc_lims      <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alphAc", x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
-AHconf_alph_lims        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alph",x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
+AHconf_habweight_lims   <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_habit_weight", x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
+AHconf_alphAc_lims      <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_action", x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
+AHconf_alph_lims        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_reward",x_coord_limits = c(0,6), y_coord_limits = c(0, 1))
 
 #########
 # Arrange Fig 4
@@ -534,14 +765,24 @@ Fig4_layout_matrix <- rbind(
 )
 
 Fig4 <- grid.arrange(
-  AHconf_stickweight_lims,
+  AHconf_habweight_lims,
   AHconf_alphAc_lims,
   AHconf_alph_lims,
   layout_matrix = Fig4_layout_matrix,
   widths = c(2.2, 0.5, 2.2, 0.5, 2.2)#,
   )
 
-ggsave("figures/Fig4.png", plot = Fig4, width = 20, height = 7, units = "in")
+ggsave("figures/Fig4.pdf", plot = Fig4, width = 20, height = 7, units = "in")
+
+#### Fig4 source data
+data_fig4 <- data.frame(
+  x_axis_mean_tpost = scatterdat_emp_AHconf$empdat_mean_tpost_days,
+  a_habit_weight    = scatterdat_emp_AHconf$emp_RLH1_habit_weight,
+  b_alpha_action    = scatterdat_emp_AHconf$emp_RLH1_alpha_action,
+  c_alpha_R         = scatterdat_emp_AHconf$emp_RLH1_alpha_reward
+)
+
+write_csv(data_fig4, "source_data/data_fig4.csv")
 
 
 ##################################
@@ -554,71 +795,264 @@ ggsave("figures/Fig4.png", plot = Fig4, width = 20, height = 7, units = "in")
 ##################################
 # Stats
 # age
-AHc_stickweight_age_mod <- lm(emp_RLH1_stickweight ~ age, data = scatterdat_emp_age_AHconf)
-summary(AHc_stickweight_age_mod)
+AHc_habweight_age_mod <- lm(emp_RLH1_habit_weight ~ age, data = scatterdat_emp_age_AHconf)
+summary(AHc_habweight_age_mod)
+effectsize::standardize_parameters(AHc_habweight_age_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_age_mod)$CI_low
+effectsize::standardize_parameters(AHc_habweight_age_mod)$CI_high
+
 # gender
-t_test_result_stickweight_gender <- t.test(emp_RLH1_stickweight ~ gender, data = scatterdat_emp_AHconf)
-t_test_result_stickweight_gender
+t_test_result_habweight_gender <- t.test(emp_RLH1_habit_weight ~ gender, data = scatterdat_emp_AHconf)
+t_test_result_habweight_gender
+effectsize::cohens_d(emp_RLH1_habit_weight ~ gender,
+         data = scatterdat_emp_AHconf)$Cohens_d
+
 # wellbeing
-AHd_stickweight_AHI_mod <- lm(emp_RLH1_stickweight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
-summary(AHd_stickweight_AHI_mod)
-AHd_alphAc_AHI_mod <- lm(emp_RLH1_alphAc ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
-summary(AHd_alphAc_AHI_mod)
-AHd_alphR_AHI_mod <- lm(emp_RLH1_alph ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
+
+# 1 / habit weight
+
+AHd_habweight_AHI_mod_quad <- lm(emp_RLH1_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+summary(AHd_habweight_AHI_mod_quad)
+AHc_habweight_AHI_mod_quad <- lm(emp_RLH1_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+summary(AHc_habweight_AHI_mod_quad)
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$CI_low
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$CI_high
+# now calculate effect size for quadratic term too
+AHc_habweight_AHI_mod_lin <- lm(emp_RLH1_habit_weight ~ empdat_AHscore , data = scatterdat_emp_AHconf)
+boot_f2_habweight <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH1_habit_weight ~ empdat_AHscore, data = d)
+  mod_quad <- lm(emp_RLH1_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_habweight <- boot(
+  data = scatterdat_emp_AHconf,
+  statistic = boot_f2_habweight,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_habweight$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_habweight, type = "perc")
+
+boot_out_disc_habweight <- boot(
+  data = scatterdat_emp_AHdisc,
+  statistic = boot_f2_habweight,
+  R = 1000
+)
+# Point estimate
+boot_out_disc_habweight$t0
+# 95% percentile CI
+boot.ci(boot_out_disc_habweight, type = "perc")
+
+# 2 / action learning rate
+
+AHd_alphAc_AHI_mod_quad <- lm(emp_RLH1_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+summary(AHd_alphAc_AHI_mod_quad)
+AHc_alphAc_AHI_mod_quad <- lm(emp_RLH1_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+summary(AHc_alphAc_AHI_mod_quad)
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$CI_high
+# now calculate effect size for quadratic term too
+AHc_alphAc_AHI_mod_lin <- lm(emp_RLH1_alpha_action ~ empdat_AHscore , data = scatterdat_emp_AHconf)
+boot_f2_alphAc <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH1_alpha_action ~ empdat_AHscore, data = d)
+  mod_quad <- lm(emp_RLH1_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_alphAc <- boot(
+  data      = scatterdat_emp_AHconf,
+  statistic = boot_f2_alphAc,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_alphAc$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_alphAc, type = "perc")
+
+boot_out_disc_alphAc <- boot(
+  data      = scatterdat_emp_AHdisc,
+  statistic = boot_f2_alphAc,
+  R         = 1000
+)
+# Point estimate
+boot_out_disc_alphAc$t0
+# 95% percentile CI
+boot.ci(boot_out_disc_alphAc, type = "perc")
+
+# 3 / reward learning rate
+
+AHd_alphR_AHI_mod <- lm(emp_RLH1_alpha_reward ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
 summary(AHd_alphR_AHI_mod)
-AHc_stickweight_AHI_mod <- lm(emp_RLH1_stickweight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
-summary(AHc_stickweight_AHI_mod)
-AHc_alphAc_AHI_mod <- lm(emp_RLH1_alphAc ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
-summary(AHc_alphAc_AHI_mod)
-AHc_alphR_AHI_mod <- lm(emp_RLH1_alph ~ empdat_AHscore, data = scatterdat_emp_AHconf)
+AHc_alphR_AHI_mod <- lm(emp_RLH1_alpha_reward ~ empdat_AHscore, data = scatterdat_emp_AHconf)
 summary(AHc_alphR_AHI_mod)
+effectsize::standardize_parameters(AHc_alphR_AHI_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphR_AHI_mod)$CI_low
+effectsize::standardize_parameters(AHc_alphR_AHI_mod)$CI_high
+
 # Meta-analysis
-## stickiness weight
-meta_stickweight_AHI_linear <- rma(
-  yi  = c(coef(AHd_stickweight_AHI_mod)["empdat_AHscore"][[1]], coef(AHc_stickweight_AHI_mod)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_stickweight_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_stickweight_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"])
+## habit weight
+meta_habweight_AHI_linear <- rma(
+  yi  = c(
+    effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$Std_Coefficient[2]
+    ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad)$CI_high[2] -  effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$CI_high[2] -  effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad)$CI_low[2]) / (2 * 1.96)
+    )
 )
-summary(meta_stickweight_AHI_linear)
-forest(meta_stickweight_AHI_linear)
-meta_stickweight_AHI_quad <- rma(
-  yi  = c(coef(AHd_stickweight_AHI_mod)["I(empdat_AHscore^2)"][[1]], coef(AHc_stickweight_AHI_mod)["I(empdat_AHscore^2)"][[1]]),
-  sei = c(summary(AHd_stickweight_AHI_mod)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_stickweight_AHI_mod)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
+summary(meta_habweight_AHI_linear)
+forest(meta_habweight_AHI_linear)
+meta_habweight_AHI_quad <- rma(
+  yi = c(
+    boot_out_disc_habweight$t0,
+    boot_out_conf_habweight$t0
+  ),
+  sei = c(
+    (boot.ci(boot_out_disc_habweight, type = "perc")$percent[5] - boot.ci(boot_out_disc_habweight, type = "perc")$percent[4]) / (2 * 1.96),
+    (boot.ci(boot_out_conf_habweight, type = "perc")$percent[5] - boot.ci(boot_out_conf_habweight, type = "perc")$percent[4]) / (2 * 1.96)
+  )
 )
-summary(meta_stickweight_AHI_quad)
-forest(meta_stickweight_AHI_quad)
+summary(meta_habweight_AHI_quad)
+forest(meta_habweight_AHI_quad)
 
 ## action learning rate
 meta_alphAc_AHI_linear <- rma(
-  yi  = c(coef(AHd_alphAc_AHI_mod)["empdat_AHscore"][[1]], coef(AHc_alphAc_AHI_mod)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_alphAc_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_alphAc_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphAc_AHI_linear)
 forest(meta_alphAc_AHI_linear)
+
 meta_alphAc_AHI_quad <- rma(
-  yi  = c(coef(AHd_alphAc_AHI_mod)["I(empdat_AHscore^2)"][[1]], coef(AHc_alphAc_AHI_mod)["I(empdat_AHscore^2)"][[1]]),
-  sei = c(summary(AHd_alphAc_AHI_mod)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_alphAc_AHI_mod)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
+  yi = c(
+    boot_out_disc_alphAc$t0,
+    boot_out_conf_alphAc$t0
+  ),
+  sei = c(
+    (boot.ci(boot_out_disc_alphAc, type = "perc")$percent[5] - boot.ci(boot_out_disc_alphAc, type = "perc")$percent[4]) / (2 * 1.96),
+    (boot.ci(boot_out_conf_alphAc, type = "perc")$percent[5] - boot.ci(boot_out_conf_alphAc, type = "perc")$percent[4]) / (2 * 1.96)
+  )
 )
 summary(meta_alphAc_AHI_quad)
 forest(meta_alphAc_AHI_quad)
 
+
 ## reward learning rate
 meta_alphR_AHI <- rma(
-  yi  = c(coef(AHd_alphR_AHI_mod)["empdat_AHscore"][[1]], coef(AHc_alphR_AHI_mod)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_alphR_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_alphR_AHI_mod)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphR_AHI_mod)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphR_AHI_mod)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphR_AHI_mod)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphR_AHI_mod)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphR_AHI_mod)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphR_AHI_mod)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphR_AHI)
 forest(meta_alphR_AHI)
 
+
+## Sensitivity analysis controlling for number of posts
+AHc_habweight_age_mod_ctrl <- lm(emp_RLH1_habit_weight ~ age + empdat_nPosts, data = scatterdat_emp_age_AHconf)
+summary(AHc_habweight_age_mod_ctrl)
+effectsize::standardize_parameters(AHc_habweight_age_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_age_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_habweight_age_mod_ctrl)$CI_high
+
+AHc_habweight_gender_mod_ctrl <- lm(emp_RLH1_habit_weight ~ gender + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_habweight_gender_mod_ctrl)
+effectsize::standardize_parameters(AHc_habweight_gender_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_gender_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_habweight_gender_mod_ctrl)$CI_high
+
+AHc_habweight_AHI_mod_ctrl <- lm(emp_RLH1_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2) + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_habweight_AHI_mod_ctrl)
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_ctrl)$CI_high
+# now calculate effect size for quadratic term too
+AHc_habweight_AHI_ctrl_mod_lin <- lm(emp_RLH1_habit_weight ~ empdat_AHscore  + empdat_nPosts, data = scatterdat_emp_AHconf)
+boot_f2_habweight_AHI_ctrl <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH1_habit_weight ~ empdat_AHscore  + empdat_nPosts, data = d)
+  mod_quad <- lm(emp_RLH1_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2) + empdat_nPosts, data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_habweight_AHI_ctrl <- boot(
+  data      = scatterdat_emp_AHconf,
+  statistic = boot_f2_habweight_AHI_ctrl,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_habweight_AHI_ctrl$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_habweight_AHI_ctrl, type = "perc")
+
+
+AHc_alphAc_AHI_mod_ctrl <- lm(emp_RLH1_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2)  + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphAc_AHI_mod_ctrl)
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_ctrl)$CI_high
+# now calculate effect size for quadratic term too
+AHc_alphAc_AHI_ctrl_mod_lin <- lm(emp_RLH1_alpha_action ~ empdat_AHscore  + empdat_nPosts, data = scatterdat_emp_AHconf)
+boot_f2_alphAc_AHI_ctrl <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH1_alpha_action ~ empdat_AHscore  + empdat_nPosts, data = d)
+  mod_quad <- lm(emp_RLH1_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2) + empdat_nPosts, data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_alphAc_AHI_ctrl <- boot(
+  data      = scatterdat_emp_AHconf,
+  statistic = boot_f2_alphAc_AHI_ctrl,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_alphAc_AHI_ctrl$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_alphAc_AHI_ctrl, type = "perc")
+
+
+AHc_alphR_AHI_mod_ctrl <- lm(emp_RLH1_alpha_reward ~ empdat_AHscore +  empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphR_AHI_mod_ctrl)
+effectsize::standardize_parameters(AHc_alphR_AHI_mod_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphR_AHI_mod_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_alphR_AHI_mod_ctrl)$CI_high
+
+
 ##################################
 # Figure 5
-AHconf_stickweight_age <- plot_scatter_lm(scatterdat_emp_age_AHconf, xvar = "age", yvar = "emp_RLH1_stickweight", point_size = 1.15)
+AHconf_habweight_age <- plot_scatter_lm(scatterdat_emp_age_AHconf, xvar = "age", yvar = "emp_RLH1_habit_weight", point_size = 1.15)
 AHconf_mean_values     <- scatterdat_emp_AHconf %>%
   group_by(gender) %>%
-  summarize(mean_y = mean(emp_RLH1_stickweight, na.rm = TRUE))
-AHconf_stickweight_gen <- create_raincloud_plot(scatterdat_emp_AHconf, "gender", "emp_RLH1_stickweight", AHconf_mean_values, gender_palette)
-AHconf_stickweight_AH  <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_stickweight", point_size =  0.95)
-AHconf_alphAc_AH       <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_alphAc", point_size = 0.95)
-AHconf_alphR_AH        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_alph", point_size = 0.95)
+  summarize(mean_y = mean(emp_RLH1_habit_weight, na.rm = TRUE))
+AHconf_habweight_gen <- create_raincloud_plot(scatterdat_emp_AHconf, "gender", "emp_RLH1_habit_weight", AHconf_mean_values, gender_palette)
+AHconf_habweight_AH  <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_habit_weight", point_size =  0.95)
+AHconf_alphAc_AH       <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_alpha_action", point_size = 0.95)
+AHconf_alphR_AH        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH1_alpha_reward", point_size = 0.95)
 
 
 
@@ -634,17 +1068,31 @@ Fig5_layout_matrix <- rbind(
 
 # Arrange the plots using grid.arrange with the layout matrix
 Fig5 <- grid.arrange(
-  AHconf_stickweight_age,
-  AHconf_stickweight_gen,
-  AHconf_stickweight_AH,
+  AHconf_habweight_age,
+  AHconf_habweight_gen,
+  AHconf_habweight_AH,
   AHconf_alphAc_AH,
   AHconf_alphR_AH,
   layout_matrix = Fig5_layout_matrix,
   heights = c(1, 0.14, 1)
 )
 
-ggsave("figures/Fig5.png", plot = Fig5, width = 10, height = 7, units = "in")
+ggsave("figures/Fig5.pdf", plot = Fig5, width = 10, height = 7, units = "in")
 
+#### Fig5 source data
+fig5_data <- list(
+  a_age                               = scatterdat_emp_age_AHconf$age,
+  a_habit_weight_AgeOutliersExcluded  = scatterdat_emp_age_AHconf$emp_RLH1_habit_weight,
+  b_gender                            = scatterdat_emp_AHconf$gender,
+  b_habit_weight                      = scatterdat_emp_AHconf$emp_RLH1_habit_weight,
+  c_AHI                               = scatterdat_emp_AHconf$empdat_AHI_score,
+  s_alpha_action                      = scatterdat_emp_AHconf$emp_RLH1_alpha_action,
+  c_alpha_R                           = scatterdat_emp_AHconf$emp_RLH1_alpha_reward
+)
+max_len_fig5     <- max(lengths(fig5_data))
+fig5_padded <- lapply(fig1_data, function(x) { length(x) <- max_len_fig5; x })
+data_fig5   <- as.data.frame(fig5_padded)
+write_csv(data_fig5, "source_data/data_fig5.csv")
 
 #-----------------------------------------------------------------------------------#
 ##########
@@ -652,51 +1100,84 @@ ggsave("figures/Fig5.png", plot = Fig5, width = 10, height = 7, units = "in")
 ##########
 #-----------------------------------------------------------------------------------#
 
-# ** The code for figure S1 can be found in the script 01-model_comparison.R, 
-# and the code for figure S2 can be found in the script 02-param_recovery.R, both saved in this folder.
 
 ##################################
 ##################################
-# Figure S3: Reward learning behavioural signature across participants
+# Figure S1: Vigour cost constant
+##################################
+##################################
+
+# Create the data
+C_values <- 1:10
+T_post <- seq(0.1, 10, length.out = 200)  # Avoid division by zero
+
+data <- expand.grid(C = C_values, T_post = T_post) %>%
+  mutate(vigour_cost = C / T_post)
+
+# Generate a brownish-red palette that darkens with C
+base_color <- "#A52A2A"  # Brownish red
+brown_red_palette <- colorRampPalette(c("#F4C2C2", base_color))(10)
+
+# Plot
+FigS1 <- ggplot(data, aes(x = T_post, y = vigour_cost, color = factor(C))) +
+  geom_line(size = 1) +
+  scale_color_manual(values = brown_red_palette) +
+  labs(
+    title = "Policy vs. Expected reward per post for different C values",
+    x = "Rwd",
+    y = "Policy",
+    color = "C"
+  ) +
+  theme_classic()
+
+ggsave("figures/FigS1.pdf", plot = FigS1, width = 7, height = 12, units = "in")
+
+
+# ** The code for figure S2 can be found in the script 01-model_comparison.R, 
+# and the code for figure S3 can be found in the script 02-param_recovery.R, both saved in this folder.
+
+##################################
+##################################
+# Figure S4: Reward learning behavioural signature across participants
 ##################################
 ##################################
 
 ################
 # Stats
 
-AHc_RPE_stickweight_sim_mod <- lm(simgen_RLH1_stickweight ~ simgen_RLH1_beta_RPE, data = scatterdat_sim_AHconf)
-summary(AHc_RPE_stickweight_sim_mod )
-AHc_RPE_stickweight_emp_mod <- lm(emp_RLH1_stickweight ~ emp_beta_RPE, data = scatterdat_emp_AHconf)
-summary(AHc_RPE_stickweight_emp_mod)
+AHc_RPE_habweight_sim_mod <- lm(simgen_RLH1_habit_weight ~ simgen_RLH1_beta_RPE, data = scatterdat_sim_AHconf)
+summary(AHc_RPE_habweight_sim_mod )
+AHc_RPE_habweight_emp_mod <- lm(emp_RLH1_habit_weight ~ emp_beta_RPE, data = scatterdat_emp_AHconf)
+summary(AHc_RPE_habweight_emp_mod)
 
 ################
-# stickweight
-# S3a
-RPE_stickweight_sim_AHconf <- plot_scatter_lm(scatterdat_sim_AHconf, xvar = "simgen_RLH1_beta_RPE", yvar = "simgen_RLH1_stickweight", y_coord_limits = c(0,1))
-# S3b
-RPE_stickweight_emp_AHconf <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "emp_beta_RPE", yvar = "emp_RLH1_stickweight",line_colour=color5, y_coord_limits = c(0,1))
+# habweight
+# S4a
+RPE_habweight_sim_AHconf <- plot_scatter_lm(scatterdat_sim_AHconf, xvar = "simgen_RLH1_beta_RPE", yvar = "simgen_RLH1_habit_weight", y_coord_limits = c(0,1))
+# S4b
+RPE_habweight_emp_AHconf <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "emp_beta_RPE", yvar = "emp_RLH1_habit_weight",line_colour=color5, y_coord_limits = c(0,1))
 
 #################
-# Figure S3
+# Figure S4
 
-FigS3_layout_matrix <- rbind(
+FigS4_layout_matrix <- rbind(
   c(1, NA, 2)  # First row: plot 1 spans two columns, plot 2 goes in the third column
 )
 
-FigS3 <- grid.arrange(
-  RPE_stickweight_sim_AHconf,
-  RPE_stickweight_emp_AHconf,
+FigS4 <- grid.arrange(
+  RPE_habweight_sim_AHconf,
+  RPE_habweight_emp_AHconf,
   nrow=1,
-  layout_matrix = FigS3_layout_matrix, 
+  layout_matrix = FigS4_layout_matrix, 
   widths = c(1, 0.23, 1)
 )
 
-ggsave("figures/FigS3.png", plot = FigS3, width = 16, height = 7, units = "in")
+ggsave("figures/FigS4.pdf", plot = FigS4, width = 16, height = 7, units = "in")
 
 
 ##################################
 ##################################
-# Figure S4: Relating behavioural signatures to posting latency and age across users
+# Figure S5: Relating behavioural signatures to posting latency and age across users
 ##################################
 ##################################
 
@@ -710,7 +1191,7 @@ AHc_RPE_age_mod <- lm(age ~ emp_beta_RPE, data = scatterdat_emp_AHconf)
 summary(AHc_RPE_age_mod)
 
 #################
-# Figure S4
+# Figure S5
 
 RPE_meantpost_AHconf <- plot_scatter_quad(scatterdat_emp_AHconf, 
                                      xvar = "emp_beta_RPE", 
@@ -724,26 +1205,264 @@ RPE_age_AHconf <- plot_scatter_lm(scatterdat_emp_age_AHconf,
                                   y_coord_limits = c(10,80))
 
 
-FigS4_layout_matrix <- rbind(
+FigS5_layout_matrix <- rbind(
   c(1, NA, 2)  # First row: plot 1 spans two columns, plot 2 goes in the third column
 )
 
-FigS4 <- grid.arrange(
+FigS5 <- grid.arrange(
   RPE_meantpost_AHconf,
   RPE_age_AHconf,
   nrow = 1,
-  layout_matrix = FigS4_layout_matrix,
+  layout_matrix = FigS5_layout_matrix,
   widths = c(1, 0.23, 1)
 )
 
-ggsave("figures/FigS4.png", plot = FigS4, width = 16, height = 7, units = "in")
+ggsave("figures/FigS5.pdf", plot = FigS4, width = 16, height = 7, units = "in")
 
 
-# ** The code for figure S5 can be found in the script 01-model_comparison.R.
+#### FigS5 source data
+figS5_data <- list(
+  a_emp_BetaRPE_ranef  = scatterdat_emp_AHconf$emp_beta_RPE,
+  a_emp_mean_tpost     = scatterdat_emp_AHconf$empdat_mean_tpost_days,
+  b_emp_BetaRPE_ranef_AgeOutliersExcluded = scatterdat_emp_age_AHconf$emp_beta_RPE,
+  b_emp_age            = scatterdat_emp_age_AHconf$age
+)
+max_len_figS5 <- max(lengths(figS5_data))
+figS5_padded <- lapply(figS5_data, function(x) { length(x) <- max_len_figS5; x })
+data_figS5   <- as.data.frame(figS5_padded)
+write_csv(data_figS5, "source_data/data_figS5.csv")
 
 ##################################
 ##################################
-# Figure S6: RLH2 Posting latency results
+# Figure S6: Model-independent signature of habit
+##################################
+##################################
+
+## stats
+AHc_Auto_habweight_sim_mod <- lm(simgen_RLH1_habit_weight ~ simgen_RLH1_beta_Auto, data = scatterdat_sim_AHconf)
+summary(AHc_Auto_habweight_sim_mod)
+AHc_Auto_habweight_emp_mod <- lm(emp_RLH1_habit_weight ~ emp_beta_Auto, data = scatterdat_emp_AHconf)
+summary(AHc_Auto_habweight_emp_mod)
+
+
+# across models
+glmAuto_list_AHconf <- list(
+  glmAuto_sim_FP_AHconf   = glmAuto_sim_FP_AHconf,
+  glmAuto_sim_CP_AHconf   = glmAuto_sim_CP_AHconf,
+  glmAuto_sim_PH_AHconf   = glmAuto_sim_PH_AHconf,
+  glmAuto_sim_RL1_AHconf  = glmAuto_sim_RL1_AHconf,
+  glmAuto_sim_RL2_AHconf  = glmAuto_sim_RL2_AHconf,
+  glmAuto_sim_RLH1_AHconf = glmAuto_sim_RLH1_AHconf,
+  glmAuto_sim_RLH2_AHconf = glmAuto_sim_RLH2_AHconf, 
+  glmAuto_empdatAHconf    = glmAuto_empdatAHconf
+)
+
+modfalsAuto_fig <- plot_glm_forest(glmAuto_list_AHconf, dataset_names_AHconf, 
+                                    glm_colour_palette, 
+                                    pred_varname = "scaled_lag_log_tpost", 
+                                    dep_varname  = "scaled_log_tpost")
+
+# across users
+Auto_habweight_sim_AHconf <- plot_scatter_lm(scatterdat_sim_AHconf, xvar = "simgen_RLH1_beta_Auto", yvar = "simgen_RLH1_habit_weight", no_xLabel = T, y_coord_limits = c(0,1))
+Auto_habweight_emp_AHconf <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "emp_beta_Auto", yvar = "emp_RLH1_habit_weight",line_colour=color5, no_xLabel = T, y_coord_limits = c(0,1))
+
+FigS6_layout_matrix <- rbind(
+  c(1, NA, 2, NA, 3)
+)
+
+FigS6 <- grid.arrange(
+  modfalsAuto_fig,
+  Auto_habweight_sim_AHconf,
+  Auto_habweight_emp_AHconf,
+  nrow=1,
+  layout_matrix = FigS6_layout_matrix, 
+  widths = c(1.1, 0.23, 1,  0.15, 1)
+)
+
+ggsave("figures/FigS6.pdf", plot = FigS6, width = 20, height = 7, units = "in")
+
+#### Source data
+
+figS6_data <- list(
+  a_simFP_BetaAuto_fixef_est      = summary(glmAuto_sim_FP_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simFP_BetaAuto_fixef_stdErr   = summary(glmAuto_sim_FP_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simCP_BetaAuto_fixef_est      = summary(glmAuto_sim_CP_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simCP_BetaAuto_fixef_stdErr   = summary(glmAuto_sim_CP_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simHP_BetaAuto_fixef_est      = summary(glmAuto_sim_PH_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simHP_BetaAuto_fixef_stdErr   = summary(glmAuto_sim_PH_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simRL1_BetaAuto_fixef_est     = summary(glmAuto_sim_RL1_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simRL1_BetaAuto_fixef_stdErr  = summary(glmAuto_sim_RL1_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simRL2_BetaAuto_fixef_est     = summary(glmAuto_sim_RL2_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simRL2_BetaAuto_fixef_stdErr  = summary(glmAuto_sim_RL2_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simRLH1_BetaAuto_fixef_est    = summary(glmAuto_sim_RLH1_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simRLH1_BetaAuto_fixef_stdErr = summary(glmAuto_sim_RLH1_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_simRLH2_BetaAuto_fixef_est    = summary(glmAuto_sim_RLH2_AHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_simRLH2_BetaAuto_fixef_stdErr = summary(glmAuto_sim_RLH2_AHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  a_emp_BetaAuto_fixef_est        = summary(glmAuto_empdatAHconf)$coefficients["scaled_lag_log_tpost", "Estimate"],
+  a_emp_BetaAuto_fixef_stdErr     = summary(glmAuto_empdatAHconf)$coefficients["scaled_lag_log_tpost", "Std. Error"],
+  
+  b_sim_BetaAuto_ranef            = scatterdat_sim_AHconf$simgen_RLH1_beta_Auto,
+  b_sim_BetaAuto_habit_weight     = scatterdat_sim_AHconf$simgen_RLH1_habit_weight,
+  c_emp_BetaAuto_ranef            = scatterdat_emp_AHconf$emp_beta_Auto,
+  c_emp_BetaAuto_habit_weight     = scatterdat_emp_AHconf$emp_RLH1_habit_weight
+  
+  )
+max_len_figS6 <- max(lengths(figS6_data))
+figS6_padded <- lapply(figS6_data, function(x) { length(x) <- max_len_figS6; x })
+data_figS6   <- as.data.frame(figS6_padded)
+write_csv(data_figS6, "source_data/data_figS6.csv")
+
+# ** The code for figure S7, S8 and S9 can be found in the script 01-model_comparison.R.
+
+##################################
+##################################
+# Figure S11: Model falsification with different definitions of RPE
+##################################
+##################################
+
+## reward prediction as previous 5 posts
+glmdat_sim_FP_AHconf_prev5   <- mkvars_glm(simgen_FP_AHconf, RPE_type = "prev5")
+glmdat_sim_CP_AHconf_prev5   <- mkvars_glm(simgen_CP_AHconf, RPE_type = "prev5")
+glmdat_sim_PH_AHconf_prev5   <- mkvars_glm(simgen_PH_AHconf, RPE_type = "prev5")
+glmdat_sim_RL1_AHconf_prev5  <- mkvars_glm(simgen_RL1_AHconf, RPE_type = "prev5")
+glmdat_sim_RL2_AHconf_prev5  <- mkvars_glm(simgen_RL2_AHconf, RPE_type = "prev5")
+glmdat_sim_RLH1_AHconf_prev5 <- mkvars_glm(simgen_RLH1_AHconf, RPE_type = "prev5")
+glmdat_sim_RLH2_AHconf_prev5 <- mkvars_glm(simgen_RLH2_AHconf, RPE_type = "prev5")
+#### empirical
+glmdat_empdatAHconf_prev5   <- mkvars_glm(empdat_AHconf, RPE_type = "prev5")
+#### do GLMs
+glmRPE_sim_FP_AHconf_prev5   <- glmdat_sim_FP_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_CP_AHconf_prev5   <- glmdat_sim_CP_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_PH_AHconf_prev5   <- glmdat_sim_PH_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL1_AHconf_prev5  <- glmdat_sim_RL1_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL2_AHconf_prev5  <- glmdat_sim_RL2_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RLH1_AHconf_prev5 <- glmdat_sim_RLH1_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RLH2_AHconf_prev5 <- glmdat_sim_RLH2_AHconf_prev5 %>% glm_RPE_deltatpost(.)
+# all empdat
+glmRPE_empdatAHconf_prev5    <- glmdat_empdatAHconf_prev5 %>% glm_RPE_deltatpost(.)
+
+glmRPE_list_AHconf_prev5 <- list(
+  glmRPE_sim_FP_AHconf   = glmRPE_sim_FP_AHconf_prev5,
+  glmRPE_sim_CP_AHconf   = glmRPE_sim_CP_AHconf_prev5,
+  glmRPE_sim_PH_AHconf   = glmRPE_sim_PH_AHconf_prev5,
+  glmRPE_sim_RL1_AHconf  = glmRPE_sim_RL1_AHconf_prev5,
+  glmRPE_sim_RL2_AHconf  = glmRPE_sim_RL2_AHconf_prev5,
+  glmRPE_sim_RLH1_AHconf = glmRPE_sim_RLH1_AHconf_prev5,
+  glmRPE_sim_RLH2_AHconf = glmRPE_sim_RLH2_AHconf_prev5, 
+  glmRPE_empdatAHconf    = glmRPE_empdatAHconf_prev5
+)
+
+modfals_fig_prev5 <- plot_glm_forest(glmRPE_list_AHconf_prev5, dataset_names_AHconf, 
+                               glm_colour_palette, 
+                               pred_varname = "scaled_lag_RPE", 
+                               dep_varname  = "scaled_delta_logtpost")
+####
+## reward prediction as all previous posts
+glmdat_sim_FP_AHconf_prevAll   <- mkvars_glm(simgen_FP_AHconf, RPE_type = "prevAll")
+glmdat_sim_CP_AHconf_prevAll   <- mkvars_glm(simgen_CP_AHconf, RPE_type = "prevAll")
+glmdat_sim_PH_AHconf_prevAll   <- mkvars_glm(simgen_PH_AHconf, RPE_type = "prevAll")
+glmdat_sim_RL1_AHconf_prevAll  <- mkvars_glm(simgen_RL1_AHconf, RPE_type = "prevAll")
+glmdat_sim_RL2_AHconf_prevAll  <- mkvars_glm(simgen_RL2_AHconf, RPE_type = "prevAll")
+glmdat_sim_RLH1_AHconf_prevAll <- mkvars_glm(simgen_RLH1_AHconf, RPE_type = "prevAll")
+glmdat_sim_RLH2_AHconf_prevAll <- mkvars_glm(simgen_RLH2_AHconf, RPE_type = "prevAll")
+#### empirical
+glmdat_empdatAHconf_prevAll   <- mkvars_glm(empdat_AHconf, RPE_type = "prevAll")
+#### do GLMs
+glmRPE_sim_FP_AHconf_prevAll   <- glmdat_sim_FP_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_CP_AHconf_prevAll   <- glmdat_sim_CP_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_PH_AHconf_prevAll   <- glmdat_sim_PH_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL1_AHconf_prevAll  <- glmdat_sim_RL1_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RL2_AHconf_prevAll  <- glmdat_sim_RL2_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RLH1_AHconf_prevAll <- glmdat_sim_RLH1_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+glmRPE_sim_RLH2_AHconf_prevAll <- glmdat_sim_RLH2_AHconf_prevAll %>% glm_RPE_deltatpost(.)
+# all empdat
+glmRPE_empdatAHconf_prevAll    <- glmdat_empdatAHconf_prevAll %>% glm_RPE_deltatpost(.)
+
+glmRPE_list_AHconf_prevAll <- list(
+  glmRPE_sim_FP_AHconf   = glmRPE_sim_FP_AHconf_prevAll,
+  glmRPE_sim_CP_AHconf   = glmRPE_sim_CP_AHconf_prevAll,
+  glmRPE_sim_PH_AHconf   = glmRPE_sim_PH_AHconf_prevAll,
+  glmRPE_sim_RL1_AHconf  = glmRPE_sim_RL1_AHconf_prevAll,
+  glmRPE_sim_RL2_AHconf  = glmRPE_sim_RL2_AHconf_prevAll,
+  glmRPE_sim_RLH1_AHconf = glmRPE_sim_RLH1_AHconf_prevAll,
+  glmRPE_sim_RLH2_AHconf = glmRPE_sim_RLH2_AHconf_prevAll, 
+  glmRPE_empdatAHconf    = glmRPE_empdatAHconf_prevAll
+)
+
+modfals_fig_prevAll <- plot_glm_forest(glmRPE_list_AHconf_prevAll, dataset_names_AHconf, 
+                                     glm_colour_palette, 
+                                     pred_varname = "scaled_lag_RPE", 
+                                     dep_varname  = "scaled_delta_logtpost")
+
+
+#########
+# Arrange Fig S11
+# Arrange plots with added space 
+FigS11a <- grid.arrange(
+  modcomp_fig, modfals_fig_prevAll, 
+  layout_matrix = Fig3_layout_matrix,
+  widths = c(1.8, 0.5, 1.1),  # Control relative height of each row (0.2 for the spacer),
+  heights = 1
+)
+
+# Arrange plots with added space
+FigS11b <- grid.arrange(
+  modcomp_fig, modfals_fig_prev5, 
+  layout_matrix = Fig3_layout_matrix,
+  widths = c(1.8, 0.5, 1.1),  # Control relative height of each row (0.2 for the spacer),
+  heights = 1
+)
+
+ggsave("figures/FigS11a.pdf", plot = FigS11a, width = 17, height = 8, units = "in")
+ggsave("figures/FigS11b.pdf", plot = FigS11b, width = 17, height = 8, units = "in")
+
+
+#### Source data
+
+figS11_data <- list(
+  a_simFP_BetaRPE_fixef_est_prevAll      = summary(glmRPE_sim_FP_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simFP_BetaRPE_fixef_stdErr_prevAll   = summary(glmRPE_sim_FP_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simCP_BetaRPE_fixef_est_prevAll      = summary(glmRPE_sim_CP_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simCP_BetaRPE_fixef_stdErr_prevAll   = summary(glmRPE_sim_CP_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simHP_BetaRPE_fixef_est_prevAll      = summary(glmRPE_sim_PH_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simHP_BetaRPE_fixef_stdErr_prevAll   = summary(glmRPE_sim_PH_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRL1_BetaRPE_fixef_est_prevAll     = summary(glmRPE_sim_RL1_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRL1_BetaRPE_fixef_stdErr_prevAll  = summary(glmRPE_sim_RL1_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRL2_BetaRPE_fixef_est_prevAll     = summary(glmRPE_sim_RL2_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRL2_BetaRPE_fixef_stdErr_prevAll  = summary(glmRPE_sim_RL2_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRLH1_BetaRPE_fixef_est_prevAll    = summary(glmRPE_sim_RLH1_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRLH1_BetaRPE_fixef_stdErr_prevAll = summary(glmRPE_sim_RLH1_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_simRLH2_BetaRPE_fixef_est_prevAll    = summary(glmRPE_sim_RLH2_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_simRLH2_BetaRPE_fixef_stdErr_prevAll = summary(glmRPE_sim_RLH2_AHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  a_emp_BetaRPE_fixef_est_prevAll    = summary(glmRPE_empdatAHconf_prevAll)$coefficients["scaled_lag_RPE", "Estimate"],
+  a_emp_BetaRPE_fixef_stdErr_prevAll = summary(glmRPE_empdatAHconf_prevAll)$coefficients["scaled_lag_RPE", "Std. Error"],
+  
+  b_simFP_BetaRPE_fixef_est_prev5      = summary(glmRPE_sim_FP_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simFP_BetaRPE_fixef_stdErr_prev5   = summary(glmRPE_sim_FP_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simCP_BetaRPE_fixef_est_prev5      = summary(glmRPE_sim_CP_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simCP_BetaRPE_fixef_stdErr_prev5   = summary(glmRPE_sim_CP_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simHP_BetaRPE_fixef_est_prev5      = summary(glmRPE_sim_PH_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simHP_BetaRPE_fixef_stdErr_prev5   = summary(glmRPE_sim_PH_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simRL1_BetaRPE_fixef_est_prev5     = summary(glmRPE_sim_RL1_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simRL1_BetaRPE_fixef_stdErr_prev5  = summary(glmRPE_sim_RL1_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simRL2_BetaRPE_fixef_est_prev5     = summary(glmRPE_sim_RL2_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simRL2_BetaRPE_fixef_stdErr_prev5  = summary(glmRPE_sim_RL2_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simRLH1_BetaRPE_fixef_est_prev5    = summary(glmRPE_sim_RLH1_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simRLH1_BetaRPE_fixef_stdErr_prev5 = summary(glmRPE_sim_RLH1_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_simRLH2_BetaRPE_fixef_est_prev5    = summary(glmRPE_sim_RLH2_AHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_simRLH2_BetaRPE_fixef_stdErr_prev5 = summary(glmRPE_sim_RLH2_AHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"],
+  b_emp_BetaRPE_fixef_est_prev5    = summary(glmRPE_empdatAHconf_prev5)$coefficients["scaled_lag_RPE", "Estimate"],
+  b_emp_BetaRPE_fixef_stdErr_prev5 = summary(glmRPE_empdatAHconf_prev5)$coefficients["scaled_lag_RPE", "Std. Error"]
+  
+)
+max_len_figS11 <- max(lengths(figS11_data))
+figS11_padded <- lapply(figS11_data, function(x) { length(x) <- max_len_figS11; x })
+data_figS11   <- as.data.frame(figS11_padded)
+write_csv(data_figS11, "source_data/data_figS11.csv")
+
+##################################
+##################################
+# Figure S12: RLH2 Posting latency results
 ##################################
 ##################################
 
@@ -752,9 +1471,9 @@ ggsave("figures/FigS4.png", plot = FigS4, width = 16, height = 7, units = "in")
 
 AHc_t_test_result_posbiasRLH2 <- t.test(scatterdat_emp_AHconf$emp_RLH2_alph_P, scatterdat_emp_AHconf$emp_RLH2_alph_N, paired = TRUE)
 AHc_t_test_result_posbiasRLH2
-AHc_stickweight_meantpost_mod_RLH2 <- lm(emp_RLH2_stickweight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
-summary(AHc_stickweight_meantpost_mod_RLH2)
-AHc_alphAc_meantpost_mod_RLH2 <- lm(emp_RLH2_alphAc ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
+AHc_habweight_meantpost_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
+summary(AHc_habweight_meantpost_mod_RLH2)
+AHc_alphAc_meantpost_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphAc_meantpost_mod_RLH2)
 Ahd_posbias_meantpost_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_mean_tpost_days, data = scatterdat_emp_AHdisc)
 summary(Ahd_posbias_meantpost_mod_RLH2)
@@ -766,6 +1485,18 @@ AHc_alphP_meantpost_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_mean_tpost_days, dat
 summary(AHc_alphP_meantpost_mod_RLH2)
 AHc_alphN_meantpost_mod_RLH2 <- lm(emp_RLH2_alph_N ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphN_meantpost_mod_RLH2)
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2)$CI_high
+
+# control for number of posts
+AHc_alphN_meantpost_mod_RLH2_ctrl <- lm(emp_RLH2_alph_N ~ empdat_mean_tpost_days + empdat_nPosts, data = scatterdat_emp_AHconf)
+summary(AHc_alphN_meantpost_mod_RLH2_ctrl) 
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2_ctrl)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2_ctrl)$CI_low
+effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2_ctrl)$CI_high
+
+
 ### alpha P meta analysis
 meta_meantpost_alphP_RLH2 <- rma(
   yi  = c(coef(AHd_alphP_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]], coef(AHc_alphP_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]]),
@@ -783,7 +1514,7 @@ forest(meta_meantpost_posbias_RLH2)
 
 
 ################
-# Figure S6
+# Figure S12
 
 RLH2_df <- pivot_longer(scatterdat_emp_AHconf, 
                         cols = c(emp_RLH2_alph_P, emp_RLH2_alph_N),
@@ -791,81 +1522,101 @@ RLH2_df <- pivot_longer(scatterdat_emp_AHconf,
                         values_to = "Value")
 RLH2posbias_palette <- c("emp_RLH2_alph_P" = color4, "emp_RLH2_alph_N" = color4)
 AHconf_posbias <- plot_violin(RLH2_df,"Variable", "Value", fillvar = "Variable", palette = RLH2posbias_palette  )
-AHconf_meantpost_stickweight_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_stickweight", y_coord_limits = c(0,1))
-AHconf_meantpost_alphAc_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_alphAc", y_coord_limits = c(0,1))
+AHconf_meantpost_habweight_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_habit_weight", y_coord_limits = c(0,1))
+AHconf_meantpost_alphAc_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_alpha_action", y_coord_limits = c(0,1))
 AHconf_meantpost_posbias_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_posbias", y_coord_limits = c(-1,1))
 AHconf_meantpost_alphN_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_alph_N", y_coord_limits = c(0,1))
 AHconf_meantpost_alphP_RLH2 <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH2_alph_P", y_coord_limits = c(0,1))
 
 
-FigS6_layout_matrix <- rbind(
+FigS12_layout_matrix <- rbind(
   c(1, NA, 2, NA, 3),
   c(NA, NA, NA, NA, NA),
   c(4, NA, 5, NA, 6)
 )
 
-FigS6 <- grid.arrange(
+FigS12 <- grid.arrange(
   AHconf_posbias, 
-  AHconf_meantpost_stickweight_RLH2, 
+  AHconf_meantpost_habweight_RLH2, 
   AHconf_meantpost_alphAc_RLH2,
   AHconf_meantpost_posbias_RLH2,
   AHconf_meantpost_alphP_RLH2, 
   AHconf_meantpost_alphN_RLH2,
-  layout_matrix = FigS6_layout_matrix, 
+  layout_matrix = FigS12_layout_matrix, 
   widths = c(1, 0.23, 1, 0.23, 1), 
   heights = c(1, 0.3, 1)
 )
 
-ggsave("figures/FigS6.png", plot = FigS6, width = 18, height = 12, units = "in")
+ggsave("figures/FigS12.pdf", plot = FigS12, width = 18, height = 12, units = "in")
 
+#### FigS12 source data
+data_figS12 <- data.frame(
+  a_RLH2_alpha_N    = scatterdat_emp_AHconf$emp_RLH2_alph_N,
+  a_RLH2_alpha_P    = scatterdat_emp_AHconf$emp_RLH2_alph_P,
+  b_RLH2_mean_tpost = scatterdat_emp_AHconf$empdat_mean_tpost_days,
+  b_RLH2_habit_weight = scatterdat_emp_AHconf$emp_RLH2_habit_weight,
+  c_RLH2_alpha_action = scatterdat_emp_AHconf$emp_RLH2_alpha_action,
+  d_RLH2_alpha_action = scatterdat_emp_AHconf$emp_RLH2_posbias
+)
+write_csv(data_figS12, "source_data/data_figS12.csv")
 
 ##################################
 ##################################
-# Figure S7: RLH2 Age and gender results
+# Figure S13: RLH2 Age and gender results
 ##################################
 ##################################
 
 ##################################
 # Stats
-AHc_stickweight_age_mod_RLH2 <- lm(emp_RLH2_stickweight ~ age, data = scatterdat_emp_age_AHconf)
-summary(AHc_stickweight_age_mod_RLH2)
-t_test_result_stickweight_gender_RLH2 <- t.test(emp_RLH2_stickweight ~ gender, data = scatterdat_emp_AHconf)
-t_test_result_stickweight_gender_RLH2
+AHc_habweight_age_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ age, data = scatterdat_emp_age_AHconf)
+summary(AHc_habweight_age_mod_RLH2)
+t_test_result_habweight_gender_RLH2 <- t.test(emp_RLH2_habit_weight ~ gender, data = scatterdat_emp_AHconf)
+t_test_result_habweight_gender_RLH2
 
 
 ##################################
-# Figure S7
-AHconf_stickweight_age_RLH2 <- plot_scatter_lm(scatterdat_emp_age_AHconf, xvar = "age", yvar = "emp_RLH2_stickweight")
+# Figure S13
+AHconf_habweight_age_RLH2 <- plot_scatter_lm(scatterdat_emp_age_AHconf, xvar = "age", yvar = "emp_RLH2_habit_weight")
 AHconf_mean_values_RLH2 <- scatterdat_emp_AHconf %>%
   group_by(gender) %>%
-  summarize(mean_y = mean(emp_RLH2_stickweight, na.rm = TRUE))
-AHconf_stickweight_gen_RLH2 <- create_raincloud_plot(scatterdat_emp_AHconf, "gender", "emp_RLH2_stickweight", AHconf_mean_values_RLH2, gender_palette)
+  summarize(mean_y = mean(emp_RLH2_habit_weight, na.rm = TRUE))
+AHconf_habweight_gen_RLH2 <- create_raincloud_plot(scatterdat_emp_AHconf, "gender", "emp_RLH2_habit_weight", AHconf_mean_values_RLH2, gender_palette)
 
 
-FigS7_layout_matrix <- rbind(
+FigS13_layout_matrix <- rbind(
   c(1, NA, 2, NA, 3)
 )
 
-FigS7 <- grid.arrange(
-  AHconf_stickweight_age_RLH2,
-  AHconf_stickweight_gen_RLH2,
-  layout_matrix = FigS7_layout_matrix, 
+FigS13 <- grid.arrange(
+  AHconf_habweight_age_RLH2,
+  AHconf_habweight_gen_RLH2,
+  layout_matrix = FigS12_layout_matrix, 
   widths = c(1.6, 0.23, 1)
 )
-ggsave("figures/FigS7.png", plot = FigS7, width = 18, height = 7, units = "in")
+ggsave("figures/FigS13.pdf", plot = FigS13, width = 18, height = 7, units = "in")
 
-
-
+#### FigS13 source data
+figS13_data <- list(
+  a_emp_age            = scatterdat_emp_age_AHconf$age,
+  a_RLH2_habit_weight_AgeOutliersExcluded = scatterdat_emp_age_AHconf$emp_RLH2_habit_weight,
+  b_RLH2_habit_weight = scatterdat_emp_AHconf$emp_RLH2_habit_weight,
+  b_gender            = scatterdat_emp_AHconf$gender
+  
+)
+max_len_figS13 <- max(lengths(figS13_data))
+figS13_padded <- lapply(figS13_data, function(x) { length(x) <- max_len_figS13; x })
+data_figS13   <- as.data.frame(figS13_padded)
+write_csv(data_figS13, "source_data/data_figS13.csv")
 
 ##################################
 # Stats
-AHd_stickweight_AHI_mod_RLH2 <- lm(emp_RLH2_stickweight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
-summary(AHd_stickweight_AHI_mod_RLH2)
-AHc_stickweight_AHI_mod_RLH2 <- lm(emp_RLH2_stickweight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
-summary(AHc_stickweight_AHI_mod_RLH2)
-AHd_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alphAc ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+AHd_habweight_AHI_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+summary(AHd_habweight_AHI_mod_RLH2)
+AHc_habweight_AHI_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+summary(AHc_habweight_AHI_mod_RLH2)
+AHd_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
 summary(AHd_alphAc_AHI_mod_RLH2)
-AHc_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alphAc ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+AHc_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
 summary(AHc_alphAc_AHI_mod_RLH2)
 AHd_alphP_AHI_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
 summary(AHd_alphP_AHI_mod_RLH2)
@@ -880,19 +1631,19 @@ summary(AHd_posbias_AHI_mod_RLH2)
 AHc_posbias_AHI_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_AHscore, data = scatterdat_emp_AHconf)
 summary(AHc_posbias_AHI_mod_RLH2)
 # Meta-analysis
-## stickweight
-meta_stickweight_AHI_linear_RLH2 <- rma(
-  yi  = c(coef(AHd_stickweight_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_stickweight_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_stickweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_stickweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+## habweight
+meta_habweight_AHI_linear_RLH2 <- rma(
+  yi  = c(coef(AHd_habweight_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_habweight_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
+  sei = c(summary(AHd_habweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_habweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
 )
-summary(meta_stickweight_AHI_linear_RLH2)
-forest(meta_stickweight_AHI_linear_RLH2)
-meta_stickweight_AHI_quad_RLH2 <- rma(
-  yi  = c(coef(AHd_stickweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]], coef(AHc_stickweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]]),
-  sei = c(summary(AHd_stickweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_stickweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
+summary(meta_habweight_AHI_linear_RLH2)
+forest(meta_habweight_AHI_linear_RLH2)
+meta_habweight_AHI_quad_RLH2 <- rma(
+  yi  = c(coef(AHd_habweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]], coef(AHc_habweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]]),
+  sei = c(summary(AHd_habweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_habweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
 )
-summary(meta_stickweight_AHI_quad_RLH2)
-forest(meta_stickweight_AHI_quad_RLH2)
+summary(meta_habweight_AHI_quad_RLH2)
+forest(meta_habweight_AHI_quad_RLH2)
 
 ## alphAc
 meta_alphAc_AHI_linear_RLH2 <- rma(
@@ -934,38 +1685,49 @@ forest(meta_posbias_AHI_RLH2)
 
 
 ##################################
-# Figure S8
+# Figure S14
 
-AHconf_stickweight_AHI_RLH2  <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_stickweight")
-AHconf_alphAc_AHI_RLH2       <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_alphAc")
+AHconf_habweight_AHI_RLH2  <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_habit_weight")
+AHconf_alphAc_AHI_RLH2       <- plot_scatter_quad(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_alpha_action")
 AHconf_alphP_AHI_RLH2        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_alph_P")
 AHconf_alphN_AHI_RLH2        <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_alph_N")
 AHconf_posbias_AHI_RLH2      <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_AHscore", yvar = "emp_RLH2_posbias")
 
 
-FigS8_layout_matrix <- rbind(
+FigS14_layout_matrix <- rbind(
   c(1, NA, 2, NA, NA),
   c(NA, NA, NA, NA, NA),
   c(3, NA, 4, NA, 5)
 )
 
-FigS8 <- grid.arrange(
-  AHconf_stickweight_AHI_RLH2,
+FigS14 <- grid.arrange(
+  AHconf_habweight_AHI_RLH2,
   AHconf_alphAc_AHI_RLH2,
   AHconf_alphP_AHI_RLH2,
   AHconf_alphN_AHI_RLH2,
   AHconf_posbias_AHI_RLH2,
   
-  layout_matrix = FigS8_layout_matrix, 
+  layout_matrix = FigS14_layout_matrix, 
   heights = c(1, 0.23, 1),
   widths = c(1, 0.23, 1, 0.23, 1)
 )
-ggsave("figures/FigS8.png", plot = FigS8, width = 12.5, height = 7, units = "in")
+ggsave("figures/FigS14.pdf", plot = FigS14, width = 12.5, height = 7, units = "in")
 
+#### FigS13 source data
+data_figS14 <- data.frame(
+  x_axis_emp_AHI      = scatterdat_emp_AHconf$empdat_AHscore,
+  a_RLH2_habit_weight = scatterdat_emp_AHconf$emp_RLH2_habit_weight,
+  b_RLH2_alpha_action = scatterdat_emp_AHconf$emp_RLH2_alpha_action,
+  c_RLH2_alpha_P = scatterdat_emp_AHconf$emp_RLH2_alph_P,
+  d_RLH2_alpha_N = scatterdat_emp_AHconf$emp_RLH2_alph_N,
+  e_RLH2_posbias = scatterdat_emp_AHconf$emp_RLH2_posbias
+  
+)
+write_csv(data_figS14, "source_data/data_figS14.csv")
 
 ##################################
 ##################################
-# Figure S9: Posting latency correlations with outliers removed
+# Figure S15: Posting latency correlations with outliers removed
 ##################################
 ##################################
 
@@ -990,13 +1752,13 @@ scatterdat_emp_AHc_tpostOutRemoved <- filter(scatterdat_emp_AHconf,
 
 ##################################
 # Stats
-AHc_stickweight_meantpost_mod_OutRemoved <- lm(emp_RLH1_stickweight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
-summary(AHc_stickweight_meantpost_mod_OutRemoved)
-AHc_alphAc_meantpost_mod_OutRemoved <- lm(emp_RLH1_alphAc ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
+AHc_habweight_meantpost_mod_OutRemoved <- lm(emp_RLH1_habit_weight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
+summary(AHc_habweight_meantpost_mod_OutRemoved)
+AHc_alphAc_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_action ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
 summary(AHc_alphAc_meantpost_mod_OutRemoved)
-AHd_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alph ~ empdat_mean_tpost_days, data = scatterdat_emp_AHd_tpostOutRemoved)
+AHd_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHd_tpostOutRemoved)
 summary(AHd_alphR_meantpost_mod_OutRemoved)
-AHc_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alph ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
+AHc_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
 summary(AHc_alphR_meantpost_mod_OutRemoved)
 # Meta-analysis
 meta_alphR_meantpost_OutRemoved <- rma(
@@ -1007,38 +1769,81 @@ summary(meta_alphR_meantpost_OutRemoved)
 forest(meta_alphR_meantpost_OutRemoved)
 
 ##################################
-# Figure S9
+# Figure S15
 
 ### outliers not removed
-AHconf_stickweight_OutIn <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_stickweight", y_coord_limits = c(0,1))
-AHconf_alphAc_OutIn <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alphAc", y_coord_limits = c(0,1))
-AHconf_alphR_OutIn <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alph", y_coord_limits = c(0,1))
+AHconf_habweight_OutIn   <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_habit_weight", y_coord_limits = c(0,1))
+AHconf_alphAc_OutIn      <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_action", y_coord_limits = c(0,1))
+AHconf_alphR_OutIn       <- plot_scatter_lm(scatterdat_emp_AHconf, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_reward", y_coord_limits = c(0,1))
 # outliers removed
 ### alpha
-AHconf_stickweight_OutRemoved <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_stickweight", y_coord_limits = c(0,1))
-AHconf_alphAc_OutRemoved <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alphAc", y_coord_limits = c(0,1))
-AHconf_alphR_OutRemoved <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alph", y_coord_limits = c(0,1))
+AHconf_habweight_OutRemoved   <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_habit_weight", y_coord_limits = c(0,1))
+AHconf_alphAc_OutRemoved      <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_action", y_coord_limits = c(0,1))
+AHconf_alphR_OutRemoved       <- plot_scatter_lm(scatterdat_emp_AHc_tpostOutRemoved, xvar = "empdat_mean_tpost_days", yvar = "emp_RLH1_alpha_reward", y_coord_limits = c(0,1))
 
 
-FigS9_layout_matrix <- rbind(
+FigS15_layout_matrix <- rbind(
   c(1, NA, 2, NA, 3),
   c(NA, NA, NA, NA, NA),
   c(4, NA, 5, NA, 6)
 )
 
-FigS9 <- grid.arrange(
-  AHconf_stickweight_OutIn,
+FigS15 <- grid.arrange(
+  AHconf_habweight_OutIn,
   AHconf_alphAc_OutIn,
   AHconf_alphR_OutIn,
-  AHconf_stickweight_OutRemoved,
+  AHconf_habweight_OutRemoved,
   AHconf_alphAc_OutRemoved,
   AHconf_alphR_OutRemoved,
   
-  layout_matrix = FigS9_layout_matrix, 
+  layout_matrix = FigS15_layout_matrix, 
   heights = c(1, 0.23, 1),
   widths = c(1, 0.23, 1, 0.23, 1)
 )
-ggsave("figures/FigS9.png", plot = FigS9, width = 12.5, height = 7, units = "in")
+ggsave("figures/FigS15.pdf", plot = FigS15, width = 12.5, height = 7, units = "in")
 
 ##########
+
+#### FigS15 source data
+figS15_data <- list(
+  x_axis_mean_tpost = scatterdat_emp_AHconf$empdat_mean_tpost_days,
+  a_habit_weight    = scatterdat_emp_AHconf$emp_RLH1_habit_weight,
+  b_alpha_action    = scatterdat_emp_AHconf$emp_RLH1_alpha_action,
+  c_alpha_R         = scatterdat_emp_AHconf$emp_RLH1_alpha_reward,
+  x_axis_mean_tpost_TpostOutLiersRemoved = scatterdat_emp_AHc_tpostOutRemoved$empdat_mean_tpost_days,
+  d_habit_weight_mean_tpost_TpostOutLiersRemoved    = scatterdat_emp_AHc_tpostOutRemoved$emp_RLH1_habit_weight,
+  e_alpha_action_mean_tpost_TpostOutLiersRemoved    = scatterdat_emp_AHc_tpostOutRemoved$emp_RLH1_alpha_action,
+  f_alpha_R_mean_tpost_TpostOutLiersRemoved         = scatterdat_emp_AHc_tpostOutRemoved$emp_RLH1_alpha_reward
+
+)
+max_len_figS15 <- max(lengths(figS15_data))
+figS15_padded <- lapply(figS15_data, function(x) { length(x) <- max_len_figS15; x })
+data_figS15   <- as.data.frame(figS15_padded)
+write_csv(data_figS15, "source_data/data_figS15.csv")
+summary(lm(scatterdat_emp_AHc_tpostOutRemoved$emp_RLH1_alpha_reward ~ scatterdat_emp_AHc_tpostOutRemoved$empdat_mean_tpost_days ))
+#-----------------------------------------------------------------------------------#
+##########
+############## REVIEWER-RESPONSE RESULTS
+##########
+#-----------------------------------------------------------------------------------#
+
+# R2.7 - Habitual users vs. number of posts
+
+# simulation analysis to establish whether nPosts correlates with fitted habit weight (detailed in 'Reviewer Response' document)
+# load data fitted to RLH1 simulated dataset, where all simulated agents had the same parameters but different numbers of posts
+fitdat_nPosts     <-  read_csv(str_c("./../../data_processed/Twitter/fit/250323-0959RLH1_realPostNumbers/250323-1314RLH11unshortened.csv"))                
+scatterdat_nPosts <- data.frame(habit_weight  = fitdat_nPosts$stickiness_weight,
+                                alpha              = fitdat_nPosts$alpha,
+                                alpha_action       = fitdat_nPosts$alpha_action,
+                                cost               = fitdat_nPosts$cost,
+                                nPosts             = scatterdat_emp_AHconf$empdat_nPosts
+                                )
+habweight_nPosts <- lm(habit_weight ~ nPosts, data = scatterdat_nPosts)
+summary(habweight_nPosts)
+alphaR_nPosts <- lm(alpha ~ nPosts, data = scatterdat_nPosts)
+summary(alphaR_nPosts)
+alphAc_nPosts <- lm(alpha_action ~ nPosts, data = scatterdat_nPosts)
+summary(alphAc_nPosts)
+cost_nPosts <- lm(cost ~ nPosts, data = scatterdat_nPosts)
+summary(cost_nPosts)
 
