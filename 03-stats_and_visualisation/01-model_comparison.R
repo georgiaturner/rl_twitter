@@ -41,7 +41,7 @@ library(ggridges)
 library(gridExtra)
 setwd(here("03-stats_and_visualisation"))
 source('00-functions.R')
-#source('00-functions_with_Lindstrom.R')
+#source('00-functions_with_Lindstrom.R') # use this version only to reproduce the analysis with the lindstrom model in the Supplementary
 #-----------------------------------------------------------------------------------#
 #-----------------------------------------------------------------------------------#
 #--------------------       AICW FOR MODEL RECOVERY      ---------------------------#

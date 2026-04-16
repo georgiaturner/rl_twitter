@@ -806,6 +806,11 @@ t_test_result_habweight_gender <- t.test(emp_RLH1_habit_weight ~ gender, data = 
 t_test_result_habweight_gender
 effectsize::cohens_d(emp_RLH1_habit_weight ~ gender,
          data = scatterdat_emp_AHconf)$Cohens_d
+effectsize::cohens_d(emp_RLH1_habit_weight ~ gender,
+                     data = scatterdat_emp_AHconf)$CI_low
+effectsize::cohens_d(emp_RLH1_habit_weight ~ gender,
+                     data = scatterdat_emp_AHconf)$CI_high
+
 
 # wellbeing
 
@@ -1147,8 +1152,16 @@ ggsave("figures/FigS1.pdf", plot = FigS1, width = 7, height = 12, units = "in")
 
 AHc_RPE_habweight_sim_mod <- lm(simgen_RLH1_habit_weight ~ simgen_RLH1_beta_RPE, data = scatterdat_sim_AHconf)
 summary(AHc_RPE_habweight_sim_mod )
+effectsize::standardize_parameters(AHc_RPE_habweight_sim_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_RPE_habweight_sim_mod)$CI_low
+effectsize::standardize_parameters(AHc_RPE_habweight_sim_mod)$CI_high
+
 AHc_RPE_habweight_emp_mod <- lm(emp_RLH1_habit_weight ~ emp_beta_RPE, data = scatterdat_emp_AHconf)
 summary(AHc_RPE_habweight_emp_mod)
+effectsize::standardize_parameters(AHc_RPE_habweight_emp_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_RPE_habweight_emp_mod)$CI_low
+effectsize::standardize_parameters(AHc_RPE_habweight_emp_mod)$CI_high
+
 
 ################
 # habweight
@@ -1187,8 +1200,32 @@ ggsave("figures/FigS4.pdf", plot = FigS4, width = 16, height = 7, units = "in")
 
 AHc_RPE_meantpost_mod <- lm(empdat_mean_tpost_days ~ emp_beta_RPE + I(emp_beta_RPE^2), data = scatterdat_emp_AHconf)
 summary(AHc_RPE_meantpost_mod )
+# now calculate effect size for quadratic term too
+AHc_RPE_meantpost_mod_lin <- lm(empdat_mean_tpost_days ~ emp_beta_RPE , data = scatterdat_emp_AHconf)
+boot_f2_RPE_meantpost <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(empdat_mean_tpost_days ~ emp_beta_RPE, data = d)
+  mod_quad <- lm(empdat_mean_tpost_days ~ emp_beta_RPE + I(emp_beta_RPE^2), data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_RPE_meantpost <- boot(
+  data = scatterdat_emp_AHconf,
+  statistic = boot_f2_RPE_meantpost,
+  R = 1000
+)
+# Point estimate
+boot_out_RPE_meantpost$t0
+# 95% percentile CI
+boot.ci(boot_out_RPE_meantpost, type = "perc")
+
 AHc_RPE_age_mod <- lm(age ~ emp_beta_RPE, data = scatterdat_emp_AHconf)
 summary(AHc_RPE_age_mod)
+effectsize::standardize_parameters(AHc_RPE_age_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_RPE_age_mod)$CI_low
+effectsize::standardize_parameters(AHc_RPE_age_mod)$CI_high
 
 #################
 # Figure S5
@@ -1217,7 +1254,7 @@ FigS5 <- grid.arrange(
   widths = c(1, 0.23, 1)
 )
 
-ggsave("figures/FigS5.pdf", plot = FigS4, width = 16, height = 7, units = "in")
+ggsave("figures/FigS5.pdf", plot = FigS5, width = 16, height = 7, units = "in")
 
 
 #### FigS5 source data
@@ -1241,8 +1278,15 @@ write_csv(data_figS5, "source_data/data_figS5.csv")
 ## stats
 AHc_Auto_habweight_sim_mod <- lm(simgen_RLH1_habit_weight ~ simgen_RLH1_beta_Auto, data = scatterdat_sim_AHconf)
 summary(AHc_Auto_habweight_sim_mod)
+effectsize::standardize_parameters(AHc_Auto_habweight_sim_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_Auto_habweight_sim_mod)$CI_low
+effectsize::standardize_parameters(AHc_Auto_habweight_sim_mod)$CI_high
+
 AHc_Auto_habweight_emp_mod <- lm(emp_RLH1_habit_weight ~ emp_beta_Auto, data = scatterdat_emp_AHconf)
 summary(AHc_Auto_habweight_emp_mod)
+effectsize::standardize_parameters(AHc_Auto_habweight_emp_mod)$Std_Coefficient
+effectsize::standardize_parameters(AHc_Auto_habweight_emp_mod)$CI_low
+effectsize::standardize_parameters(AHc_Auto_habweight_emp_mod)$CI_high
 
 
 # across models
@@ -1329,7 +1373,7 @@ glmdat_sim_RL2_AHconf_prev5  <- mkvars_glm(simgen_RL2_AHconf, RPE_type = "prev5"
 glmdat_sim_RLH1_AHconf_prev5 <- mkvars_glm(simgen_RLH1_AHconf, RPE_type = "prev5")
 glmdat_sim_RLH2_AHconf_prev5 <- mkvars_glm(simgen_RLH2_AHconf, RPE_type = "prev5")
 #### empirical
-glmdat_empdatAHconf_prev5   <- mkvars_glm(empdat_AHconf, RPE_type = "prev5")
+glmdat_empdatAHconf_prev5    <- mkvars_glm(empdat_AHconf, RPE_type = "prev5")
 #### do GLMs
 glmRPE_sim_FP_AHconf_prev5   <- glmdat_sim_FP_AHconf_prev5 %>% glm_RPE_deltatpost(.)
 glmRPE_sim_CP_AHconf_prev5   <- glmdat_sim_CP_AHconf_prev5 %>% glm_RPE_deltatpost(.)
@@ -1366,7 +1410,7 @@ glmdat_sim_RL2_AHconf_prevAll  <- mkvars_glm(simgen_RL2_AHconf, RPE_type = "prev
 glmdat_sim_RLH1_AHconf_prevAll <- mkvars_glm(simgen_RLH1_AHconf, RPE_type = "prevAll")
 glmdat_sim_RLH2_AHconf_prevAll <- mkvars_glm(simgen_RLH2_AHconf, RPE_type = "prevAll")
 #### empirical
-glmdat_empdatAHconf_prevAll   <- mkvars_glm(empdat_AHconf, RPE_type = "prevAll")
+glmdat_empdatAHconf_prevAll    <- mkvars_glm(empdat_AHconf, RPE_type = "prevAll")
 #### do GLMs
 glmRPE_sim_FP_AHconf_prevAll   <- glmdat_sim_FP_AHconf_prevAll %>% glm_RPE_deltatpost(.)
 glmRPE_sim_CP_AHconf_prevAll   <- glmdat_sim_CP_AHconf_prevAll %>% glm_RPE_deltatpost(.)
@@ -1471,18 +1515,46 @@ write_csv(data_figS11, "source_data/data_figS11.csv")
 
 AHc_t_test_result_posbiasRLH2 <- t.test(scatterdat_emp_AHconf$emp_RLH2_alph_P, scatterdat_emp_AHconf$emp_RLH2_alph_N, paired = TRUE)
 AHc_t_test_result_posbiasRLH2
+effectsize::cohens_d(scatterdat_emp_AHconf$emp_RLH2_alph_P, scatterdat_emp_AHconf$emp_RLH2_alph_N, paired = TRUE)$Cohens_d
+effectsize::cohens_d(scatterdat_emp_AHconf$emp_RLH2_alph_P, scatterdat_emp_AHconf$emp_RLH2_alph_N, paired = TRUE)$CI_low
+effectsize::cohens_d(scatterdat_emp_AHconf$emp_RLH2_alph_P, scatterdat_emp_AHconf$emp_RLH2_alph_N, paired = TRUE)$CI_high
+
 AHc_habweight_meantpost_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_habweight_meantpost_mod_RLH2)
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_RLH2)$CI_high
+
 AHc_alphAc_meantpost_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphAc_meantpost_mod_RLH2)
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_RLH2)$CI_high
+
 Ahd_posbias_meantpost_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_mean_tpost_days, data = scatterdat_emp_AHdisc)
 summary(Ahd_posbias_meantpost_mod_RLH2)
+effectsize::standardize_parameters(Ahd_posbias_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(Ahd_posbias_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(Ahd_posbias_meantpost_mod_RLH2)$CI_high
+
 Ahc_posbias_meantpost_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(Ahc_posbias_meantpost_mod_RLH2)
+effectsize::standardize_parameters(Ahc_posbias_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(Ahc_posbias_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(Ahc_posbias_meantpost_mod_RLH2)$CI_high
+
 AHd_alphP_meantpost_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_mean_tpost_days, data = scatterdat_emp_AHdisc)
 summary(AHd_alphP_meantpost_mod_RLH2)
+effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$CI_high
+
 AHc_alphP_meantpost_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphP_meantpost_mod_RLH2)
+effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$CI_high
+
 AHc_alphN_meantpost_mod_RLH2 <- lm(emp_RLH2_alph_N ~ empdat_mean_tpost_days, data = scatterdat_emp_AHconf)
 summary(AHc_alphN_meantpost_mod_RLH2)
 effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2)$Std_Coefficient
@@ -1497,13 +1569,21 @@ effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2_ctrl)$CI_low
 effectsize::standardize_parameters(AHc_alphN_meantpost_mod_RLH2_ctrl)$CI_high
 
 
-### alpha P meta analysis
+
+## reward learning rate
 meta_meantpost_alphP_RLH2 <- rma(
-  yi  = c(coef(AHd_alphP_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]], coef(AHc_alphP_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]]),
-  sei = c(summary(AHd_alphP_meantpost_mod_RLH2)$coefficients["empdat_mean_tpost_days", "Std. Error"], summary(AHc_alphP_meantpost_mod_RLH2)$coefficients["empdat_mean_tpost_days", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphP_meantpost_mod_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphP_meantpost_mod_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_meantpost_alphP_RLH2)
 forest(meta_meantpost_alphP_RLH2)
+
 ### posbias meta analysis
 meta_meantpost_posbias_RLH2 <- rma(
   yi  = c(coef(Ahd_posbias_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]], coef(Ahc_posbias_meantpost_mod_RLH2)["empdat_mean_tpost_days"][[1]]),
@@ -1570,8 +1650,21 @@ write_csv(data_figS12, "source_data/data_figS12.csv")
 # Stats
 AHc_habweight_age_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ age, data = scatterdat_emp_age_AHconf)
 summary(AHc_habweight_age_mod_RLH2)
+effectsize::standardize_parameters(AHc_habweight_age_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_age_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_habweight_age_mod_RLH2)$CI_high
+
+
 t_test_result_habweight_gender_RLH2 <- t.test(emp_RLH2_habit_weight ~ gender, data = scatterdat_emp_AHconf)
 t_test_result_habweight_gender_RLH2
+effectsize::cohens_d(emp_RLH2_habit_weight ~ gender,
+                     data = scatterdat_emp_AHconf)$Cohens_d
+effectsize::cohens_d(emp_RLH2_habit_weight ~ gender,
+                     data = scatterdat_emp_AHconf)$CI_low
+effectsize::cohens_d(emp_RLH2_habit_weight ~ gender,
+                     data = scatterdat_emp_AHconf)$CI_high
+
+
 
 
 ##################################
@@ -1610,75 +1703,229 @@ write_csv(data_figS13, "source_data/data_figS13.csv")
 
 ##################################
 # Stats
-AHd_habweight_AHI_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
-summary(AHd_habweight_AHI_mod_RLH2)
-AHc_habweight_AHI_mod_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
-summary(AHc_habweight_AHI_mod_RLH2)
-AHd_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
-summary(AHd_alphAc_AHI_mod_RLH2)
-AHc_alphAc_AHI_mod_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
-summary(AHc_alphAc_AHI_mod_RLH2)
+AHd_habweight_AHI_mod_quad_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+summary(AHd_habweight_AHI_mod_quad_RLH2)
+effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$CI_high
+
+AHc_habweight_AHI_mod_quad_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+summary(AHc_habweight_AHI_mod_quad_RLH2)
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$CI_high
+
+# now calculate effect size for quadratic term too
+AHc_habweight_AHI_mod_lin_RLH2 <- lm(emp_RLH2_habit_weight ~ empdat_AHscore , data = scatterdat_emp_AHconf)
+boot_f2_habweight_RLH2 <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH2_habit_weight ~ empdat_AHscore, data = d)
+  mod_quad <- lm(emp_RLH2_habit_weight ~ empdat_AHscore + I(empdat_AHscore^2), data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_habweight_RLH2 <- boot(
+  data = scatterdat_emp_AHconf,
+  statistic = boot_f2_habweight_RLH2,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_habweight_RLH2$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_habweight_RLH2, type = "perc")
+
+boot_out_disc_habweight_RLH2 <- boot(
+  data = scatterdat_emp_AHdisc,
+  statistic = boot_f2_habweight_RLH2,
+  R = 1000
+)
+# Point estimate
+boot_out_disc_habweight_RLH2$t0
+# 95% percentile CI
+boot.ci(boot_out_disc_habweight_RLH2, type = "perc")
+
+AHd_alphAc_AHI_mod_quad_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHdisc)
+summary(AHd_alphAc_AHI_mod_quad_RLH2)
+effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$CI_high
+
+AHc_alphAc_AHI_mod_quad_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = scatterdat_emp_AHconf)
+summary(AHc_alphAc_AHI_mod_quad_RLH2)
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$CI_high
+
+# now calculate effect size for quadratic term too
+AHc_alphAc_AHI_mod_lin_RLH2 <- lm(emp_RLH2_alpha_action ~ empdat_AHscore , data = scatterdat_emp_AHconf)
+boot_f2_alphAc_RLH2 <- function(data, indices) {
+  
+  d <- data[indices, ]
+  
+  mod_lin  <- lm(emp_RLH2_alpha_action ~ empdat_AHscore, data = d)
+  mod_quad <- lm(emp_RLH2_alpha_action ~ empdat_AHscore + I(empdat_AHscore^2), data = d)
+  
+  get_f2(mod_quad, mod_lin)
+}
+boot_out_conf_alphAc_RLH2 <- boot(
+  data = scatterdat_emp_AHconf,
+  statistic = boot_f2_alphAc_RLH2,
+  R = 1000
+)
+# Point estimate
+boot_out_conf_alphAc_RLH2$t0
+# 95% percentile CI
+boot.ci(boot_out_conf_alphAc_RLH2, type = "perc")
+
+boot_out_disc_alphAc_RLH2 <- boot(
+  data = scatterdat_emp_AHdisc,
+  statistic = boot_f2_alphAc_RLH2,
+  R = 1000
+)
+# Point estimate
+boot_out_disc_alphAc_RLH2$t0
+# 95% percentile CI
+boot.ci(boot_out_disc_alphAc_RLH2, type = "perc")
+
+
 AHd_alphP_AHI_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
 summary(AHd_alphP_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$CI_high
+
 AHc_alphP_AHI_mod_RLH2 <- lm(emp_RLH2_alph_P ~ empdat_AHscore, data = scatterdat_emp_AHconf)
 summary(AHc_alphP_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$CI_high
+
 AHd_alphN_AHI_mod_RLH2 <- lm(emp_RLH2_alph_N ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
 summary(AHd_alphN_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$CI_high
+
 AHc_alphN_AHI_mod_RLH2 <- lm(emp_RLH2_alph_N ~ empdat_AHscore, data = scatterdat_emp_AHconf)
 summary(AHc_alphN_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$CI_high
+
 AHd_posbias_AHI_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_AHscore, data = scatterdat_emp_AHdisc)
 summary(AHd_posbias_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$CI_high
+
 AHc_posbias_AHI_mod_RLH2 <- lm(emp_RLH2_posbias ~ empdat_AHscore, data = scatterdat_emp_AHconf)
 summary(AHc_posbias_AHI_mod_RLH2)
+effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$Std_Coefficient
+effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$CI_low
+effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$CI_high
+
 # Meta-analysis
-## habweight
+## habit weight
 meta_habweight_AHI_linear_RLH2 <- rma(
-  yi  = c(coef(AHd_habweight_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_habweight_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_habweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_habweight_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_habweight_AHI_mod_quad_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_habweight_AHI_mod_quad_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_habweight_AHI_linear_RLH2)
 forest(meta_habweight_AHI_linear_RLH2)
 meta_habweight_AHI_quad_RLH2 <- rma(
-  yi  = c(coef(AHd_habweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]], coef(AHc_habweight_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]]),
-  sei = c(summary(AHd_habweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_habweight_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
+  yi = c(
+    boot_out_disc_habweight_RLH2$t0,
+    boot_out_conf_habweight_RLH2$t0
+  ),
+  sei = c(
+    (boot.ci(boot_out_disc_habweight_RLH2, type = "perc")$percent[5] - boot.ci(boot_out_disc_habweight_RLH2, type = "perc")$percent[4]) / (2 * 1.96),
+    (boot.ci(boot_out_conf_habweight_RLH2, type = "perc")$percent[5] - boot.ci(boot_out_conf_habweight_RLH2, type = "perc")$percent[4]) / (2 * 1.96)
+  )
 )
 summary(meta_habweight_AHI_quad_RLH2)
 forest(meta_habweight_AHI_quad_RLH2)
 
+
 ## alphAc
+
 meta_alphAc_AHI_linear_RLH2 <- rma(
-  yi  = c(coef(AHd_alphAc_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_alphAc_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_alphAc_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_alphAc_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphAc_AHI_mod_quad_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphAc_AHI_mod_quad_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphAc_AHI_linear_RLH2)
-forest(meta_alphAc_AHI_linear)
+forest(meta_alphAc_AHI_linear_RLH2)
+
 meta_alphAc_AHI_quad_RLH2 <- rma(
-  yi  = c(coef(AHd_alphAc_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]], coef(AHc_alphAc_AHI_mod_RLH2)["I(empdat_AHscore^2)"][[1]]),
-  sei = c(summary(AHd_alphAc_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"], summary(AHc_alphAc_AHI_mod_RLH2)$coefficients["I(empdat_AHscore^2)", "Std. Error"])
+  yi = c(
+    boot_out_disc_alphAc_RLH2$t0,
+    boot_out_conf_alphAc_RLH2$t0
+  ),
+  sei = c(
+    (boot.ci(boot_out_disc_alphAc_RLH2, type = "perc")$percent[5] - boot.ci(boot_out_disc_alphAc_RLH2, type = "perc")$percent[4]) / (2 * 1.96),
+    (boot.ci(boot_out_conf_alphAc_RLH2, type = "perc")$percent[5] - boot.ci(boot_out_conf_alphAc_RLH2, type = "perc")$percent[4]) / (2 * 1.96)
+  )
 )
 summary(meta_alphAc_AHI_quad_RLH2)
 forest(meta_alphAc_AHI_quad_RLH2)
 
+
 # alpha P
+
 meta_alphP_AHI_RLH2 <- rma(
-  yi  = c(coef(AHd_alphP_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_alphP_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_alphP_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_alphP_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphP_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphP_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphP_AHI_RLH2)
 forest(meta_alphP_AHI_RLH2)
 
+
 # alpha N
+
 meta_alphN_AHI_RLH2 <- rma(
-  yi  = c(coef(AHd_alphN_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_alphN_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_alphN_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_alphN_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphN_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphN_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphN_AHI_RLH2)
 forest(meta_alphN_AHI_RLH2)
 
+
 # posbias 
+
 meta_posbias_AHI_RLH2 <- rma(
-  yi  = c(coef(AHd_posbias_AHI_mod_RLH2)["empdat_AHscore"][[1]], coef(AHc_posbias_AHI_mod_RLH2)["empdat_AHscore"][[1]]),
-  sei = c(summary(AHd_posbias_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"], summary(AHc_posbias_AHI_mod_RLH2)$coefficients["empdat_AHscore", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHd_posbias_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$CI_high[2] -  effectsize::standardize_parameters(AHc_posbias_AHI_mod_RLH2)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_posbias_AHI_RLH2)
 forest(meta_posbias_AHI_RLH2)
@@ -1754,19 +2001,43 @@ scatterdat_emp_AHc_tpostOutRemoved <- filter(scatterdat_emp_AHconf,
 # Stats
 AHc_habweight_meantpost_mod_OutRemoved <- lm(emp_RLH1_habit_weight ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
 summary(AHc_habweight_meantpost_mod_OutRemoved)
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_OutRemoved)$Std_Coefficient
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_OutRemoved)$CI_low
+effectsize::standardize_parameters(AHc_habweight_meantpost_mod_OutRemoved)$CI_high
+
 AHc_alphAc_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_action ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
 summary(AHc_alphAc_meantpost_mod_OutRemoved)
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_OutRemoved)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_OutRemoved)$CI_low
+effectsize::standardize_parameters(AHc_alphAc_meantpost_mod_OutRemoved)$CI_high
+
 AHd_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHd_tpostOutRemoved)
 summary(AHd_alphR_meantpost_mod_OutRemoved)
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$Std_Coefficient
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$CI_low
+effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$CI_high
+
 AHc_alphR_meantpost_mod_OutRemoved <- lm(emp_RLH1_alpha_reward ~ empdat_mean_tpost_days, data = scatterdat_emp_AHc_tpostOutRemoved)
 summary(AHc_alphR_meantpost_mod_OutRemoved)
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$Std_Coefficient
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$CI_low
+effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$CI_high
+
 # Meta-analysis
+
 meta_alphR_meantpost_OutRemoved <- rma(
-  yi  = c(coef(AHd_alphR_meantpost_mod_OutRemoved)["empdat_mean_tpost_days"][[1]], coef(AHc_alphR_meantpost_mod_OutRemoved)["empdat_mean_tpost_days"][[1]]),
-  sei = c(summary(AHd_alphR_meantpost_mod_OutRemoved)$coefficients["empdat_mean_tpost_days", "Std. Error"], summary(AHc_alphR_meantpost_mod_OutRemoved)$coefficients["empdat_mean_tpost_days", "Std. Error"])
+  yi  = c(
+    effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$Std_Coefficient[2],
+    effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$Std_Coefficient[2]
+  ),
+  sei = c(
+    ( effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$CI_high[2] -  effectsize::standardize_parameters(AHd_alphR_meantpost_mod_OutRemoved)$CI_low[2]) / (2 * 1.96),
+    ( effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$CI_high[2] -  effectsize::standardize_parameters(AHc_alphR_meantpost_mod_OutRemoved)$CI_low[2]) / (2 * 1.96)
+  )
 )
 summary(meta_alphR_meantpost_OutRemoved)
 forest(meta_alphR_meantpost_OutRemoved)
+
 
 ##################################
 # Figure S15
