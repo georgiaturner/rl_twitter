@@ -1090,12 +1090,12 @@ fig5_data <- list(
   a_habit_weight_AgeOutliersExcluded  = scatterdat_emp_age_AHconf$emp_RLH1_habit_weight,
   b_gender                            = scatterdat_emp_AHconf$gender,
   b_habit_weight                      = scatterdat_emp_AHconf$emp_RLH1_habit_weight,
-  c_AHI                               = scatterdat_emp_AHconf$empdat_AHI_score,
-  s_alpha_action                      = scatterdat_emp_AHconf$emp_RLH1_alpha_action,
+  c_AHI                               = scatterdat_emp_AHconf$empdat_AHscore,
+  c_alpha_action                      = scatterdat_emp_AHconf$emp_RLH1_alpha_action,
   c_alpha_R                           = scatterdat_emp_AHconf$emp_RLH1_alpha_reward
 )
 max_len_fig5     <- max(lengths(fig5_data))
-fig5_padded <- lapply(fig1_data, function(x) { length(x) <- max_len_fig5; x })
+fig5_padded <- lapply(fig5_data, function(x) { length(x) <- max_len_fig5; x })
 data_fig5   <- as.data.frame(fig5_padded)
 write_csv(data_fig5, "source_data/data_fig5.csv")
 
